@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import TranscriptionEditor from "./pages/TranscriptionEditor";
+import TranslationEditor from "./pages/TranslationEditor";
 import AdminPanel from "./pages/AdminPanel";
+import ProjectReview from "./pages/ProjectReview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -19,7 +21,9 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/transcribe" element={<TranscriptionEditor />} />
+          <Route path="/translate" element={<TranslationEditor />} />
           <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/admin/project/:id" element={<ProjectReview />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -123,7 +123,7 @@ const AdminPanel = () => {
                       <div className="flex items-center space-x-2 ml-4">
                         <Button variant="outline" size="sm">
                           <Eye className="w-4 h-4" />
-                          Review
+                          View Details
                         </Button>
                         <Button 
                           variant="outline" 

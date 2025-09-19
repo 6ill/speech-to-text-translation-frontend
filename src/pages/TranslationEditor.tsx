@@ -4,23 +4,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Play, Pause, SkipBack, SkipForward, Save, Edit, Volume2, ArrowRight } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Save, Languages, Volume2, ArrowRight } from "lucide-react";
 import TimestampEditor from "@/components/TimestampEditor";
 
-const TranscriptionEditor = () => {
+const TranslationEditor = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const duration = 83; // 1:23 in seconds
 
-  const [transcriptionSegments, setTranscriptionSegments] = useState([
+  const [transcriptionSegments] = useState([
     {
       id: "1",
       startTime: 0,
       endTime: 15,
       text: "Selamat pagi semuanya, hari ini kita akan membahas tentang algoritma sorting.",
-      originalText: "Selamat pagi semuanya, hari ini kita akan membahas algoritma sorting.",
-      isEdited: true,
-      editedBy: "Sarah A.",
       confidence: 95
     },
     {
@@ -46,14 +43,48 @@ const TranscriptionEditor = () => {
     }
   ]);
 
+  const [translationSegments, setTranslationSegments] = useState([
+    {
+      id: "1",
+      startTime: 0,
+      endTime: 15,
+      text: "Good morning everyone, today we will discuss about sorting algorithms.",
+      originalText: "Good morning everyone, today we will discuss sorting algorithm.",
+      isEdited: true,
+      editedBy: "Sarah A.",
+      confidence: 89
+    },
+    {
+      id: "2",
+      startTime: 15, 
+      endTime: 35,
+      text: "Sorting algorithm is the process of arranging data from smallest to largest or vice versa.",
+      confidence: 94
+    },
+    {
+      id: "3",
+      startTime: 35,
+      endTime: 55,
+      text: "There are several types of sorting algorithms that we will learn today.",
+      confidence: 92
+    },
+    {
+      id: "4",
+      startTime: 55,
+      endTime: 83,
+      text: "Namely bubble sort, selection sort, and insertion sort. Let's start with bubble sort.",
+      confidence: 88
+    }
+  ]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleTranscriptionEdit = (segmentId: string, newText: string) => {
-    setTranscriptionSegments(prev => 
+  const handleTranslationEdit = (segmentId: string, newText: string) => {
+    setTranslationSegments(prev => 
       prev.map(segment => 
         segment.id === segmentId 
           ? { 
@@ -69,7 +100,7 @@ const TranscriptionEditor = () => {
   };
 
   const handleSaveAll = () => {
-    console.log("Saving all transcription changes:", transcriptionSegments);
+    console.log("Saving all translation changes:", translationSegments);
     // Here you would save all changes to backend
   };
 
@@ -81,18 +112,18 @@ const TranscriptionEditor = () => {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Transcription Editor</h1>
+              <h1 className="text-3xl font-bold text-foreground">Translation Editor</h1>
               <p className="text-muted-foreground">Kuliah Algoritma dan Struktur Data - Pertemuan 5</p>
             </div>
             <div className="flex items-center space-x-2">
               <Badge className="bg-academic-teal text-white">In Progress</Badge>
               <ArrowRight className="w-4 h-4 text-muted-foreground" />
-              <Badge variant="outline">Transcription Phase</Badge>
+              <Badge variant="outline">Translation Phase</Badge>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Audio Player */}
           <div className="lg:col-span-1">
             <Card className="border-primary/10 bg-gradient-card sticky top-4">
@@ -172,18 +203,25 @@ const TranscriptionEditor = () => {
                     ))}
                   </div>
                 </div>
+                
+                <div className="pt-4 border-t border-border">
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>Translation Quality: <span className="font-medium text-primary">91%</span></p>
+                    <p>Contributors: <span className="font-medium">3 people</span></p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Transcription Editor */}
-          <div className="lg:col-span-2">
+          {/* Translation Content */}
+          <div className="lg:col-span-3">
             <Card className="border-primary/10 bg-gradient-card">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center space-x-2">
-                    <Edit className="w-5 h-5 text-primary" />
-                    <span>Indonesian Transcription</span>
+                    <Languages className="w-5 h-5 text-primary" />
+                    <span>Indonesian → English Translation</span>
                   </CardTitle>
                   <div className="flex space-x-2">
                     <Button variant="outline" size="sm">
@@ -197,70 +235,92 @@ const TranscriptionEditor = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="timestamp" className="space-y-4">
+                <Tabs defaultValue="side-by-side" className="space-y-4">
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="timestamp">Timestamp View</TabsTrigger>
-                    <TabsTrigger value="full-text">Full Text View</TabsTrigger>
+                    <TabsTrigger value="side-by-side">Side by Side</TabsTrigger>
+                    <TabsTrigger value="translation-only">Translation Only</TabsTrigger>
                   </TabsList>
                   
-                  <TabsContent value="timestamp" className="space-y-4">
-                    <div className="max-h-[500px] overflow-y-auto">
-                      <TimestampEditor
-                        segments={transcriptionSegments}
-                        onSegmentEdit={handleTranscriptionEdit}
-                        currentTime={currentTime}
-                        type="transcription"
-                      />
+                  <TabsContent value="side-by-side" className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
+                        <h3 className="text-lg font-medium text-foreground mb-4 flex items-center space-x-2">
+                          <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
+                          <span>Indonesian Transcription</span>
+                        </h3>
+                        <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                          {transcriptionSegments.map((segment) => {
+                            const isCurrent = currentTime >= segment.startTime && currentTime <= segment.endTime;
+                            return (
+                              <Card 
+                                key={segment.id}
+                                className={`border transition-smooth ${
+                                  isCurrent ? 'border-blue-500 bg-blue-50' : 'border-border'
+                                }`}
+                              >
+                                <CardContent className="p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <Badge variant="outline" className="text-xs">
+                                      {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
+                                    </Badge>
+                                    {isCurrent && (
+                                      <Badge className="text-xs bg-blue-500 text-white">
+                                        Playing
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-sm leading-relaxed text-foreground">
+                                    {segment.text}
+                                  </p>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-lg font-medium text-foreground mb-4 flex items-center space-x-2">
+                          <span className="w-3 h-3 bg-academic-teal rounded-full"></span>
+                          <span>English Translation</span>
+                        </h3>
+                        <div className="max-h-[600px] overflow-y-auto">
+                          <TimestampEditor
+                            segments={translationSegments}
+                            onSegmentEdit={handleTranslationEdit}
+                            currentTime={currentTime}
+                            type="translation"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </TabsContent>
                   
-                  <TabsContent value="full-text" className="space-y-4">
-                    <div className="min-h-[400px] p-4 bg-secondary rounded-lg">
-                      <p className="text-base leading-relaxed text-foreground">
-                        {transcriptionSegments.map(segment => segment.text).join(' ')}
-                      </p>
+                  <TabsContent value="translation-only" className="space-y-4">
+                    <div className="max-h-[600px] overflow-y-auto">
+                      <TimestampEditor
+                        segments={translationSegments}
+                        onSegmentEdit={handleTranslationEdit}
+                        currentTime={currentTime}
+                        type="translation"
+                      />
                     </div>
                   </TabsContent>
                 </Tabs>
                 
-                <div className="mt-6 flex items-center justify-between">
+                <div className="mt-6 flex items-center justify-between pt-6 border-t border-border">
                   <div className="text-sm text-muted-foreground">
-                    <p>Accuracy: <span className="font-medium text-primary">92%</span></p>
+                    <p>Translation Progress: <span className="font-medium text-primary">100%</span></p>
                     <p>Edited Segments: <span className="font-medium text-academic-teal">1 of 4</span></p>
                   </div>
                   
                   <div className="flex space-x-3">
                     <Button variant="outline">
-                      Export Transcription
+                      Export Translation
                     </Button>
                     <Button variant="hero">
-                      Proceed to Translation
+                      Submit for Review
                     </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Collaboration Info */}
-            <Card className="mt-6 border-primary/10 bg-gradient-card">
-              <CardHeader>
-                <CardTitle className="text-lg">Recent Edits</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                    <div>
-                      <p className="font-medium text-foreground">Sarah Ahmad</p>
-                      <p className="text-sm text-muted-foreground">Fixed pronunciation errors in minute 2-3</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground">5 min ago</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                    <div>
-                      <p className="font-medium text-foreground">Budi Santoso</p>
-                      <p className="text-sm text-muted-foreground">Improved clarity in technical terms</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground">1 hour ago</span>
                   </div>
                 </div>
               </CardContent>
@@ -272,4 +332,4 @@ const TranscriptionEditor = () => {
   );
 };
 
-export default TranscriptionEditor;
+export default TranslationEditor;
