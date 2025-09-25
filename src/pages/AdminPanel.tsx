@@ -3,34 +3,55 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Eye, AlertTriangle, Users, FileText, TrendingUp } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Check, X, Eye, AlertTriangle, Users, FileText, TrendingUp, Play, Clock, Upload } from "lucide-react";
+import { useState } from "react";
 
 const AdminPanel = () => {
-  const pendingEdits = [
+  const [selectedFiles, setSelectedFiles] = useState<number[]>([]);
+  const pendingFiles = [
     {
       id: 1,
       user: "Sarah Ahmad",
-      project: "Kuliah Algoritma - Pertemuan 5",
-      type: "transcription",
-      changes: "Fixed pronunciation of 'algoritma' → 'algorithm'",
+      fileName: "Kuliah_Algoritma_Pertemuan_5.mp4",
+      title: "Kuliah Algoritma - Pertemuan 5",
+      duration: "45:30",
+      uploadDate: "2024-01-15",
+      status: "transcribed",
+      corrections: {
+        transcription: 12,
+        translation: 8
+      },
       confidence: 92,
       timestamp: "2 hours ago"
     },
     {
       id: 2,
       user: "Budi Santoso", 
-      project: "Machine Learning Seminar",
-      type: "translation",
-      changes: "Improved technical term translation: 'pembelajaran mesin' → 'machine learning'",
+      fileName: "ML_Seminar_Introduction.mp3",
+      title: "Machine Learning Seminar",
+      duration: "32:15",
+      uploadDate: "2024-01-14",
+      status: "translated",
+      corrections: {
+        transcription: 5,
+        translation: 15
+      },
       confidence: 88,
       timestamp: "4 hours ago"
     },
     {
       id: 3,
       user: "Maya Putri",
-      project: "React Native Workshop",
-      type: "transcription", 
-      changes: "Corrected speaker identification and timing",
+      fileName: "React_Native_Workshop.mp4",
+      title: "React Native Workshop",
+      duration: "1:12:45",
+      uploadDate: "2024-01-13",
+      status: "transcribed",
+      corrections: {
+        transcription: 18,
+        translation: 0
+      },
       confidence: 95,
       timestamp: "1 day ago"
     }
@@ -43,14 +64,40 @@ const AdminPanel = () => {
     { label: "Quality Score", value: "94.2%", change: "+2.1%", icon: TrendingUp }
   ];
 
-  const handleApprove = (editId: number) => {
-    console.log("Approving edit:", editId);
-    // Here you would call API to approve the edit
+  const handleApprove = (fileId: number) => {
+    console.log("Approving file:", fileId);
+    // Here you would call API to approve the file corrections
   };
 
-  const handleReject = (editId: number) => {
-    console.log("Rejecting edit:", editId);
-    // Here you would call API to reject the edit
+  const handleReject = (fileId: number) => {
+    console.log("Rejecting file:", fileId);
+    // Here you would call API to reject the file corrections
+  };
+
+  const handleSelectAll = () => {
+    if (selectedFiles.length === pendingFiles.length) {
+      setSelectedFiles([]);
+    } else {
+      setSelectedFiles(pendingFiles.map(file => file.id));
+    }
+  };
+
+  const handleSelectFile = (fileId: number) => {
+    setSelectedFiles(prev => 
+      prev.includes(fileId) 
+        ? prev.filter(id => id !== fileId)
+        : [...prev, fileId]
+    );
+  };
+
+  const handleBulkApprove = () => {
+    selectedFiles.forEach(fileId => handleApprove(fileId));
+    setSelectedFiles([]);
+  };
+
+  const handleBulkReject = () => {
+    selectedFiles.forEach(fileId => handleReject(fileId));
+    setSelectedFiles([]);
   };
 
   return (
@@ -91,55 +138,113 @@ const AdminPanel = () => {
           </TabsList>
           
           <TabsContent value="pending" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-foreground">Pending User Contributions</h2>
-              <Badge variant="secondary">{pendingEdits.length} items</Badge>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-foreground">Submitted Audio Files</h2>
+              <div className="flex items-center gap-3">
+                <Badge variant="secondary">{pendingFiles.length} files</Badge>
+                {selectedFiles.length > 0 && (
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleBulkReject}
+                      className="text-destructive"
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Reject ({selectedFiles.length})
+                    </Button>
+                    <Button 
+                      variant="academic" 
+                      size="sm"
+                      onClick={handleBulkApprove}
+                    >
+                      <Check className="w-4 h-4 mr-1" />
+                      Approve ({selectedFiles.length})
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mb-4 flex items-center gap-2">
+              <Checkbox 
+                checked={selectedFiles.length === pendingFiles.length && pendingFiles.length > 0}
+                onCheckedChange={handleSelectAll}
+              />
+              <span className="text-sm text-muted-foreground">Select All</span>
             </div>
             
             <div className="space-y-4">
-              {pendingEdits.map((edit) => (
-                <Card key={edit.id} className="border-primary/10 bg-gradient-card">
+              {pendingFiles.map((file) => (
+                <Card key={file.id} className="border-primary/10 bg-gradient-card">
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-3">
-                          <div className="font-medium text-foreground">{edit.user}</div>
-                          <Badge 
-                            variant={edit.type === 'transcription' ? 'default' : 'secondary'}
-                            className={edit.type === 'transcription' ? 'bg-blue-500' : 'bg-accent'}
-                          >
-                            {edit.type}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {edit.confidence}% confidence
-                          </Badge>
+                      <div className="flex items-center gap-3 flex-1">
+                        <Checkbox 
+                          checked={selectedFiles.includes(file.id)}
+                          onCheckedChange={() => handleSelectFile(file.id)}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-3">
+                            <Upload className="w-4 h-4 text-primary" />
+                            <div className="font-medium text-foreground">{file.user}</div>
+                            <Badge 
+                              variant={file.status === 'transcribed' ? 'default' : 'secondary'}
+                              className={file.status === 'transcribed' ? 'bg-blue-500' : 'bg-accent'}
+                            >
+                              {file.status}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {file.confidence}% confidence
+                            </Badge>
+                          </div>
+                          
+                          <h3 className="font-medium text-foreground mb-2">{file.title}</h3>
+                          <p className="text-sm text-muted-foreground mb-2">{file.fileName}</p>
+                          
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {file.duration}
+                            </div>
+                            <div>Uploaded: {file.uploadDate}</div>
+                            <div>Corrections: {file.corrections.transcription + file.corrections.translation}</div>
+                          </div>
+                          
+                          <div className="flex gap-2 text-xs">
+                            <Badge variant="outline">
+                              Transcription: {file.corrections.transcription} edits
+                            </Badge>
+                            <Badge variant="outline">
+                              Translation: {file.corrections.translation} edits
+                            </Badge>
+                          </div>
                         </div>
-                        
-                        <h3 className="font-medium text-foreground mb-2">{edit.project}</h3>
-                        <p className="text-muted-foreground mb-3">{edit.changes}</p>
-                        <p className="text-xs text-muted-foreground">{edit.timestamp}</p>
                       </div>
                       
                       <div className="flex items-center space-x-2 ml-4">
                         <Button variant="outline" size="sm">
-                          <Eye className="w-4 h-4" />
-                          View Details
+                          <Play className="w-4 h-4 mr-1" />
+                          Play
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Eye className="w-4 h-4 mr-1" />
+                          Review
                         </Button>
                         <Button 
                           variant="outline" 
                           size="sm"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => handleReject(edit.id)}
+                          onClick={() => handleReject(file.id)}
                         >
                           <X className="w-4 h-4" />
                         </Button>
                         <Button 
                           variant="academic" 
                           size="sm"
-                          onClick={() => handleApprove(edit.id)}
+                          onClick={() => handleApprove(file.id)}
                         >
                           <Check className="w-4 h-4" />
-                          Approve
                         </Button>
                       </div>
                     </div>
