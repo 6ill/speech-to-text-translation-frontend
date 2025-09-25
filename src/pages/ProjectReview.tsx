@@ -3,6 +3,7 @@ import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, X, Eye, Play, Pause, ArrowLeft, Clock, User, Edit } from "lucide-react";
 
@@ -23,6 +24,7 @@ interface Edit {
 }
 
 const ProjectReview = () => {
+  const [selectedEdits, setSelectedEdits] = useState<string[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const duration = 83;
@@ -106,48 +108,83 @@ const ProjectReview = () => {
     // Update edit status to rejected
   };
 
+  const handleSelectAll = (status: 'pending' | 'approved' | 'rejected') => {
+    const editsToSelect = projectEdits.filter(edit => edit.status === status);
+    if (selectedEdits.length === editsToSelect.length) {
+      setSelectedEdits([]);
+    } else {
+      setSelectedEdits(editsToSelect.map(edit => edit.id));
+    }
+  };
+
+  const handleSelectEdit = (editId: string) => {
+    setSelectedEdits(prev => 
+      prev.includes(editId) 
+        ? prev.filter(id => id !== editId)
+        : [...prev, editId]
+    );
+  };
+
+  const handleBulkApprove = () => {
+    selectedEdits.forEach(editId => handleApprove(editId));
+    setSelectedEdits([]);
+  };
+
+  const handleBulkReject = () => {
+    selectedEdits.forEach(editId => handleReject(editId));
+    setSelectedEdits([]);
+  };
+
   const pendingEdits = projectEdits.filter(edit => edit.status === 'pending');
   const approvedEdits = projectEdits.filter(edit => edit.status === 'approved');
   const rejectedEdits = projectEdits.filter(edit => edit.status === 'rejected');
 
-  const renderEditCard = (edit: Edit) => (
+  const renderEditCard = (edit: Edit, showCheckbox: boolean = false) => (
     <Card key={edit.id} className="border-primary/10 bg-gradient-card">
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center space-x-3 mb-3">
-              <div className="flex items-center space-x-2">
-                <User className="w-4 h-4 text-muted-foreground" />
-                <span className="font-medium text-foreground">{edit.userName}</span>
-              </div>
-              <Badge 
-                variant={edit.type === 'transcription' ? 'default' : 'secondary'}
-                className={edit.type === 'transcription' ? 'bg-blue-500' : 'bg-accent'}
-              >
-                {edit.type}
-              </Badge>
-              <Badge variant="outline" className="text-xs">
-                <Clock className="w-3 h-3 mr-1" />
-                {formatTime(edit.startTime)} - {formatTime(edit.endTime)}
-              </Badge>
-              <Badge variant="outline" className="text-xs">
-                {edit.confidence}% confidence
-              </Badge>
-            </div>
-            
-            <div className="space-y-3">
-              <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-                <p className="text-sm text-red-800 font-medium mb-1">Original:</p>
-                <p className="text-sm text-red-700 line-through">{edit.originalText}</p>
+          <div className="flex items-center gap-3 flex-1">
+            {showCheckbox && (
+              <Checkbox 
+                checked={selectedEdits.includes(edit.id)}
+                onCheckedChange={() => handleSelectEdit(edit.id)}
+              />
+            )}
+            <div className="flex-1">
+              <div className="flex items-center space-x-3 mb-3">
+                <div className="flex items-center space-x-2">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium text-foreground">{edit.userName}</span>
+                </div>
+                <Badge 
+                  variant={edit.type === 'transcription' ? 'default' : 'secondary'}
+                  className={edit.type === 'transcription' ? 'bg-blue-500' : 'bg-accent'}
+                >
+                  {edit.type}
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  <Clock className="w-3 h-3 mr-1" />
+                  {formatTime(edit.startTime)} - {formatTime(edit.endTime)}
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  {edit.confidence}% confidence
+                </Badge>
               </div>
               
-              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                <p className="text-sm text-green-800 font-medium mb-1">Edited:</p>
-                <p className="text-sm text-green-700">{edit.editedText}</p>
+              <div className="space-y-3">
+                <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                  <p className="text-sm text-red-800 font-medium mb-1">Original:</p>
+                  <p className="text-sm text-red-700 line-through">{edit.originalText}</p>
+                </div>
+                
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-800 font-medium mb-1">Edited:</p>
+                  <p className="text-sm text-green-700">{edit.editedText}</p>
+                </div>
               </div>
+              
+              <p className="text-xs text-muted-foreground mt-3">{edit.timestamp}</p>
             </div>
-            
-            <p className="text-xs text-muted-foreground mt-3">{edit.timestamp}</p>
           </div>
           
           {edit.status === 'pending' && (
@@ -293,7 +330,37 @@ const ProjectReview = () => {
                   <TabsContent value="pending" className="space-y-4">
                     {pendingEdits.length > 0 ? (
                       <div className="space-y-4">
-                        {pendingEdits.map(renderEditCard)}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <Checkbox 
+                              checked={selectedEdits.length === pendingEdits.length && pendingEdits.length > 0}
+                              onCheckedChange={() => handleSelectAll('pending')}
+                            />
+                            <span className="text-sm text-muted-foreground">Select All</span>
+                          </div>
+                          {selectedEdits.length > 0 && (
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={handleBulkReject}
+                                className="text-destructive"
+                              >
+                                <X className="w-4 h-4 mr-1" />
+                                Reject ({selectedEdits.length})
+                              </Button>
+                              <Button 
+                                variant="academic" 
+                                size="sm"
+                                onClick={handleBulkApprove}
+                              >
+                                <Check className="w-4 h-4 mr-1" />
+                                Approve ({selectedEdits.length})
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {pendingEdits.map(edit => renderEditCard(edit, true))}
                       </div>
                     ) : (
                       <div className="text-center py-12">
@@ -306,7 +373,7 @@ const ProjectReview = () => {
                   <TabsContent value="approved" className="space-y-4">
                     {approvedEdits.length > 0 ? (
                       <div className="space-y-4">
-                        {approvedEdits.map(renderEditCard)}
+                        {approvedEdits.map(edit => renderEditCard(edit, false))}
                       </div>
                     ) : (
                       <div className="text-center py-12">
@@ -319,7 +386,7 @@ const ProjectReview = () => {
                   <TabsContent value="rejected" className="space-y-4">
                     {rejectedEdits.length > 0 ? (
                       <div className="space-y-4">
-                        {rejectedEdits.map(renderEditCard)}
+                        {rejectedEdits.map(edit => renderEditCard(edit, false))}
                       </div>
                     ) : (
                       <div className="text-center py-12">
