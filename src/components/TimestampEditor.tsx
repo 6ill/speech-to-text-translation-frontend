@@ -76,11 +76,6 @@ const TimestampEditor = ({ segments, onSegmentEdit, currentTime, type }: Timesta
                   <Badge variant="outline" className="text-xs">
                     {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
                   </Badge>
-                  {segment.isEdited && (
-                    <Badge variant="secondary" className="text-xs bg-academic-teal text-white">
-                      Edited by {segment.editedBy}
-                    </Badge>
-                  )}
                   {isCurrent && (
                     <Badge className="text-xs bg-primary text-white">
                       Playing

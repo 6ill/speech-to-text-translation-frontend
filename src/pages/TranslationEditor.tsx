@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Play, Pause, SkipBack, SkipForward, Save, Languages, Volume2, ArrowRight } from "lucide-react";
-import TimestampEditor from "@/components/TimestampEditor";
+import { Textarea } from "@/components/ui/textarea";
+import { Play, Pause, SkipBack, SkipForward, Save, Languages, Volume2, ArrowRight, Edit, X, Check } from "lucide-react";
 
 const TranslationEditor = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [editingSegment, setEditingSegment] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
   const duration = 83; // 1:23 in seconds
 
   const [transcriptionSegments] = useState([
@@ -99,9 +101,20 @@ const TranslationEditor = () => {
     );
   };
 
-  const handleSaveAll = () => {
-    console.log("Saving all translation changes:", translationSegments);
-    // Here you would save all changes to backend
+  const handleEdit = (segment: any) => {
+    setEditingSegment(segment.id);
+    setEditText(segment.text);
+  };
+
+  const handleSave = (segmentId: string) => {
+    handleTranslationEdit(segmentId, editText);
+    setEditingSegment(null);
+    setEditText("");
+  };
+
+  const handleCancel = () => {
+    setEditingSegment(null);
+    setEditText("");
   };
 
   return (
@@ -228,58 +241,93 @@ const TranslationEditor = () => {
                     <TabsTrigger value="text-only">Text Only</TabsTrigger>
                   </TabsList>
                   
-                  <TabsContent value="side-by-side" className="space-y-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div>
-                        <h3 className="text-lg font-medium text-foreground mb-4 flex items-center space-x-2">
-                          <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                          <span>Indonesian Transcription</span>
-                        </h3>
-                        <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                          {transcriptionSegments.map((segment) => {
-                            const isCurrent = currentTime >= segment.startTime && currentTime <= segment.endTime;
-                            return (
-                              <Card 
-                                key={segment.id}
-                                className={`border transition-smooth ${
-                                  isCurrent ? 'border-blue-500 bg-blue-50' : 'border-border'
-                                }`}
-                              >
-                                <CardContent className="p-3">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <Badge variant="outline" className="text-xs">
-                                      {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
+                  <TabsContent value="side-by-side" className="space-y-4">
+                    <div className="max-h-[600px] overflow-y-auto space-y-4">
+                      {transcriptionSegments.map((segment) => {
+                        const isCurrent = currentTime >= segment.startTime && currentTime <= segment.endTime;
+                        const translationSegment = translationSegments.find(t => t.id === segment.id);
+                        const isEditing = editingSegment === segment.id;
+                        
+                        return (
+                          <Card 
+                            key={segment.id}
+                            className={`border transition-smooth ${
+                              isCurrent ? 'border-primary bg-primary/5' : 'border-border'
+                            }`}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center space-x-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
+                                  </Badge>
+                                  {isCurrent && (
+                                    <Badge className="text-xs bg-primary text-white">
+                                      Playing
                                     </Badge>
-                                    {isCurrent && (
-                                      <Badge className="text-xs bg-blue-500 text-white">
-                                        Playing
-                                      </Badge>
-                                    )}
+                                  )}
+                                </div>
+                                
+                                <div className="flex space-x-1">
+                                  {isEditing ? (
+                                    <>
+                                      <Button variant="outline" size="sm" onClick={handleCancel}>
+                                        <X className="w-3 h-3" />
+                                      </Button>
+                                      <Button variant="academic" size="sm" onClick={() => handleSave(segment.id)}>
+                                        <Check className="w-3 h-3" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button variant="outline" size="sm" onClick={() => handleEdit(translationSegment!)}>
+                                      <Edit className="w-3 h-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <div className="flex items-center space-x-2 mb-2">
+                                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                    <span className="text-xs font-medium text-muted-foreground uppercase">Indonesian</span>
                                   </div>
                                   <p className="text-sm leading-relaxed text-foreground">
                                     {segment.text}
                                   </p>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-lg font-medium text-foreground mb-4 flex items-center space-x-2">
-                          <span className="w-3 h-3 bg-academic-teal rounded-full"></span>
-                          <span>English Translation</span>
-                        </h3>
-                        <div className="max-h-[600px] overflow-y-auto">
-                          <TimestampEditor
-                            segments={translationSegments}
-                            onSegmentEdit={handleTranslationEdit}
-                            currentTime={currentTime}
-                            type="translation"
-                          />
-                        </div>
-                      </div>
+                                </div>
+                                
+                                <div className="space-y-2 border-l pl-4">
+                                  <div className="flex items-center space-x-2 mb-2">
+                                    <span className="w-2 h-2 bg-academic-teal rounded-full"></span>
+                                    <span className="text-xs font-medium text-muted-foreground uppercase">English</span>
+                                  </div>
+                                  {isEditing ? (
+                                    <Textarea
+                                      value={editText}
+                                      onChange={(e) => setEditText(e.target.value)}
+                                      className="min-h-[80px] text-sm border-primary/20 focus:border-primary"
+                                      placeholder="Edit translation here..."
+                                    />
+                                  ) : (
+                                    <div className="space-y-2">
+                                      <p className="text-sm leading-relaxed text-foreground">
+                                        {translationSegment?.text}
+                                      </p>
+                                      {translationSegment?.originalText && translationSegment.originalText !== translationSegment.text && (
+                                        <div className="p-2 bg-muted rounded text-xs">
+                                          <span className="text-muted-foreground">Original: </span>
+                                          <span className="line-through">{translationSegment.originalText}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </TabsContent>
                   
