@@ -203,13 +203,6 @@ const TranslationEditor = () => {
                     ))}
                   </div>
                 </div>
-                
-                <div className="pt-4 border-t border-border">
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>Translation Quality: <span className="font-medium text-primary">91%</span></p>
-                    <p>Contributors: <span className="font-medium">3 people</span></p>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -223,22 +216,16 @@ const TranslationEditor = () => {
                     <Languages className="w-5 h-5 text-primary" />
                     <span>Indonesian → English Translation</span>
                   </CardTitle>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <Save className="w-4 h-4" />
-                      Save Draft
-                    </Button>
-                    <Button variant="academic" size="sm" onClick={handleSaveAll}>
-                      Save All Changes
-                    </Button>
-                  </div>
+                  <Button variant="outline">
+                    Export Translation
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="side-by-side" className="space-y-4">
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="side-by-side">Side by Side</TabsTrigger>
-                    <TabsTrigger value="translation-only">Translation Only</TabsTrigger>
+                    <TabsTrigger value="text-only">Text Only</TabsTrigger>
                   </TabsList>
                   
                   <TabsContent value="side-by-side" className="space-y-6">
@@ -296,33 +283,34 @@ const TranslationEditor = () => {
                     </div>
                   </TabsContent>
                   
-                  <TabsContent value="translation-only" className="space-y-4">
-                    <div className="max-h-[600px] overflow-y-auto">
-                      <TimestampEditor
-                        segments={translationSegments}
-                        onSegmentEdit={handleTranslationEdit}
-                        currentTime={currentTime}
-                        type="translation"
-                      />
+                  <TabsContent value="text-only" className="space-y-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
+                        <h3 className="text-lg font-medium text-foreground mb-4 flex items-center space-x-2">
+                          <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
+                          <span>Indonesian Transcription</span>
+                        </h3>
+                        <div className="min-h-[400px] p-4 bg-secondary rounded-lg max-h-[600px] overflow-y-auto">
+                          <p className="text-base leading-relaxed text-foreground">
+                            {transcriptionSegments.map(segment => segment.text).join(' ')}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-lg font-medium text-foreground mb-4 flex items-center space-x-2">
+                          <span className="w-3 h-3 bg-academic-teal rounded-full"></span>
+                          <span>English Translation</span>
+                        </h3>
+                        <div className="min-h-[400px] p-4 bg-secondary rounded-lg max-h-[600px] overflow-y-auto">
+                          <p className="text-base leading-relaxed text-foreground">
+                            {translationSegments.map(segment => segment.text).join(' ')}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </TabsContent>
                 </Tabs>
-                
-                <div className="mt-6 flex items-center justify-between pt-6 border-t border-border">
-                  <div className="text-sm text-muted-foreground">
-                    <p>Translation Progress: <span className="font-medium text-primary">100%</span></p>
-                    <p>Edited Segments: <span className="font-medium text-academic-teal">1 of 4</span></p>
-                  </div>
-                  
-                  <div className="flex space-x-3">
-                    <Button variant="outline">
-                      Export Translation
-                    </Button>
-                    <Button variant="hero">
-                      Submit for Review
-                    </Button>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>

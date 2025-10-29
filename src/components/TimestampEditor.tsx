@@ -81,11 +81,6 @@ const TimestampEditor = ({ segments, onSegmentEdit, currentTime, type }: Timesta
                       Edited by {segment.editedBy}
                     </Badge>
                   )}
-                  {segment.confidence && (
-                    <Badge variant="outline" className="text-xs">
-                      {segment.confidence}% confidence
-                    </Badge>
-                  )}
                   {isCurrent && (
                     <Badge className="text-xs bg-primary text-white">
                       Playing

@@ -186,12 +186,11 @@ const TranscriptionEditor = () => {
                     <span>Indonesian Transcription</span>
                   </CardTitle>
                   <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <Save className="w-4 h-4" />
-                      Save Draft
+                    <Button variant="outline">
+                      Export Transcription
                     </Button>
-                    <Button variant="academic" size="sm" onClick={handleSaveAll}>
-                      Save All Changes
+                    <Button variant="hero">
+                      Proceed to Translation
                     </Button>
                   </div>
                 </div>
@@ -222,49 +221,9 @@ const TranscriptionEditor = () => {
                     </div>
                   </TabsContent>
                 </Tabs>
-                
-                <div className="mt-6 flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
-                    <p>Accuracy: <span className="font-medium text-primary">92%</span></p>
-                    <p>Edited Segments: <span className="font-medium text-academic-teal">1 of 4</span></p>
-                  </div>
-                  
-                  <div className="flex space-x-3">
-                    <Button variant="outline">
-                      Export Transcription
-                    </Button>
-                    <Button variant="hero">
-                      Proceed to Translation
-                    </Button>
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
-            {/* Collaboration Info */}
-            <Card className="mt-6 border-primary/10 bg-gradient-card">
-              <CardHeader>
-                <CardTitle className="text-lg">Recent Edits</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                    <div>
-                      <p className="font-medium text-foreground">Sarah Ahmad</p>
-                      <p className="text-sm text-muted-foreground">Fixed pronunciation errors in minute 2-3</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground">5 min ago</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                    <div>
-                      <p className="font-medium text-foreground">Budi Santoso</p>
-                      <p className="text-sm text-muted-foreground">Improved clarity in technical terms</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground">1 hour ago</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </main>
