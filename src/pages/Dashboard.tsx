@@ -12,8 +12,6 @@ const Dashboard = () => {
     {
       title: "Kuliah Algoritma dan Struktur Data - Pertemuan 5",
       duration: "1h 23m",
-      transcriptionProgress: 85,
-      translationProgress: 60,
       contributors: 12,
       status: "translating" as const,
       lastUpdated: "2 hours ago"
@@ -21,17 +19,13 @@ const Dashboard = () => {
     {
       title: "Seminar Machine Learning - Deep Learning Fundamentals",
       duration: "2h 15m",
-      transcriptionProgress: 100,
-      translationProgress: 95,
       contributors: 8,
-      status: "reviewing" as const,
+      status: "translated" as const,
       lastUpdated: "1 day ago"
     },
     {
       title: "Workshop React Native - Mobile Development",
       duration: "45m",
-      transcriptionProgress: 45,
-      translationProgress: 0,
       contributors: 5,
       status: "transcribing" as const,
       lastUpdated: "3 hours ago"

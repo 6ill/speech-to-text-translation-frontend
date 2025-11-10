@@ -9,17 +9,13 @@ const BrowseProjects = () => {
     {
       title: "Biology Lecture - Cell Structure",
       duration: "45:32",
-      transcriptionProgress: 100,
-      translationProgress: 100,
       contributors: 12,
-      status: "completed" as const,
+      status: "translated" as const,
       lastUpdated: "2 hours ago",
     },
     {
       title: "Math Class - Linear Algebra",
       duration: "38:15",
-      transcriptionProgress: 100,
-      translationProgress: 65,
       contributors: 8,
       status: "translating" as const,
       lastUpdated: "5 hours ago",
@@ -27,8 +23,6 @@ const BrowseProjects = () => {
     {
       title: "History Lesson - Indonesian Independence",
       duration: "52:18",
-      transcriptionProgress: 80,
-      translationProgress: 0,
       contributors: 15,
       status: "transcribing" as const,
       lastUpdated: "1 day ago",
@@ -36,17 +30,13 @@ const BrowseProjects = () => {
     {
       title: "Chemistry Lab - Organic Compounds",
       duration: "41:27",
-      transcriptionProgress: 100,
-      translationProgress: 100,
       contributors: 10,
-      status: "completed" as const,
+      status: "translated" as const,
       lastUpdated: "3 days ago",
     },
     {
       title: "Physics Class - Quantum Mechanics",
       duration: "47:55",
-      transcriptionProgress: 45,
-      translationProgress: 0,
       contributors: 6,
       status: "transcribing" as const,
       lastUpdated: "1 week ago",
@@ -54,10 +44,8 @@ const BrowseProjects = () => {
     {
       title: "English Literature - Shakespeare",
       duration: "36:42",
-      transcriptionProgress: 100,
-      translationProgress: 30,
       contributors: 9,
-      status: "reviewing" as const,
+      status: "transcribed" as const,
       lastUpdated: "2 weeks ago",
     },
   ];
