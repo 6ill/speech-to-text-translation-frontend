@@ -1,22 +1,20 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Users, FileText, Languages, Play } from "lucide-react";
+import { Clock, Play } from "lucide-react";
 
 interface ProjectCardProps {
   title: string;
   duration: string;
-  contributors: number;
   status: "transcribing" | "transcribed" | "translating" | "translated";
-  lastUpdated: string;
+  uploadedDate: string;
 }
 
 const ProjectCard = ({ 
   title, 
   duration, 
-  contributors, 
   status,
-  lastUpdated 
+  uploadedDate 
 }: ProjectCardProps) => {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -55,14 +53,10 @@ const ProjectCard = ({
             <Clock className="w-4 h-4" />
             <span>{duration}</span>
           </div>
-          <div className="flex items-center space-x-1">
-            <Users className="w-4 h-4" />
-            <span>{contributors} contributors</span>
-          </div>
         </div>
         
         <p className="text-xs text-muted-foreground">
-          Last updated: {lastUpdated}
+          Uploaded: {uploadedDate}
         </p>
       </CardContent>
       

@@ -12,23 +12,20 @@ const Dashboard = () => {
     {
       title: "Kuliah Algoritma dan Struktur Data - Pertemuan 5",
       duration: "1h 23m",
-      contributors: 12,
       status: "translating" as const,
-      lastUpdated: "2 hours ago"
+      uploadedDate: "Jan 14, 2025"
     },
     {
       title: "Seminar Machine Learning - Deep Learning Fundamentals",
       duration: "2h 15m",
-      contributors: 8,
       status: "translated" as const,
-      lastUpdated: "1 day ago"
+      uploadedDate: "Jan 13, 2025"
     },
     {
       title: "Workshop React Native - Mobile Development",
       duration: "45m",
-      contributors: 5,
       status: "transcribing" as const,
-      lastUpdated: "3 hours ago"
+      uploadedDate: "Jan 15, 2025"
     }
   ];
 
