@@ -1,7 +1,46 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Upload, FileText, Languages, Settings } from "lucide-react";
+import { Upload, Languages, Settings, LogOut } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const Header = () => {
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    // Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Logged out successfully",
+      });
+      navigate("/auth");
+    }
+  };
+
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-sm">
       <div className="container mx-auto px-4 py-4">
@@ -27,14 +66,26 @@ const Header = () => {
           </nav>
           
           <div className="flex items-center space-x-3">
-            <Button variant="outline" size="sm">
-              <Settings className="w-4 h-4" />
-              Profile
-            </Button>
-            <Button variant="academic" size="sm">
-              <Upload className="w-4 h-4" />
-              New Project
-            </Button>
+            {user ? (
+              <>
+                <Button variant="outline" size="sm">
+                  <Settings className="w-4 h-4" />
+                  Profile
+                </Button>
+                <Button variant="academic" size="sm" onClick={() => navigate("/upload")}>
+                  <Upload className="w-4 h-4" />
+                  New Project
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleLogout}>
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <Button variant="academic" size="sm" onClick={() => navigate("/auth")}>
+                Login
+              </Button>
+            )}
           </div>
         </div>
       </div>

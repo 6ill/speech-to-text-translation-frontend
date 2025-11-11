@@ -11,6 +11,7 @@ import TranscriptionEditor from "./pages/TranscriptionEditor";
 import TranslationEditor from "./pages/TranslationEditor";
 import AdminPanel from "./pages/AdminPanel";
 import ProjectReview from "./pages/ProjectReview";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,6 +24,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/auth" element={<Auth />} />
           <Route path="/upload" element={<Upload />} />
           <Route path="/projects" element={<BrowseProjects />} />
           <Route path="/project/:id" element={<ProjectResults />} />
