@@ -1,13 +1,22 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Languages } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthStore } from "@/store/authStore";
+import { loginApi, registerApi, getMeApi, buildStoredUser } from "@/api/auth";
+import { tokenStorage } from "@/lib/auth";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -16,30 +25,18 @@ const Auth = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { setAuth, isAuthenticated } = useAuthStore();
 
+  // If already authenticated, redirect away from auth page
   useEffect(() => {
-    // Check if user is already logged in
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate("/");
-      }
-    };
-    checkUser();
-
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        navigate("/");
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    if (isAuthenticated) {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       toast({
         title: "Error",
@@ -50,26 +47,28 @@ const Auth = () => {
     }
 
     setIsLoading(true);
+    try {
+      const loginRes = await loginApi({ email, password });
+      const token = loginRes.data.access_token;
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      tokenStorage.set(token);
 
-    if (error) {
-      toast({
-        title: "Login failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Success",
-        description: "Logged in successfully",
-      });
+      const me = await getMeApi();
+
+      const user = buildStoredUser(me.email, me.role);
+      setAuth(token, user);
+
+      toast({ title: "Login is successful", description: `Welcome back, ${user.name}!` });
+      navigate("/", { replace: true });
+    } catch (error: unknown) {
+      const message =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "Wrong email or password.";
+      toast({ title: "Login failed", description: message, variant: "destructive" });
+      tokenStorage.remove();
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -103,35 +102,28 @@ const Auth = () => {
     }
 
     setIsLoading(true);
-
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-      },
-    });
-
-    if (error) {
+    try {
+      await registerApi({ email, password });
       toast({
-        title: "Signup failed",
-        description: error.message,
-        variant: "destructive",
+        title: "Account succesfully created!",
+        description: "Please sign in with your account.",
       });
-    } else {
-      toast({
-        title: "Success",
-        description: "Account created successfully! You can now log in.",
-      });
-      // Reset form
+      // Reset form and switch to login tab
       setEmail("");
       setPassword("");
       setConfirmPassword("");
+    } catch (error: unknown) {
+      const message =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "Failed to register account. Try different email.";
+      toast({ 
+        title: "Failed to sign in", 
+        description: message, 
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
@@ -143,19 +135,20 @@ const Auth = () => {
           </div>
           <CardTitle className="text-2xl font-bold text-center">TranscriptCrowd</CardTitle>
           <CardDescription className="text-center">
-            Collaborative Translation Platform
+            Collaborative Speech-to-Text Platform
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Login</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-            
+
+            {/* ── Login Tab ── */}
             <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="login-email">Email</Label>
                   <Input
@@ -185,9 +178,10 @@ const Auth = () => {
                 </Button>
               </form>
             </TabsContent>
-            
+
+            {/* ── Sign Up Tab ── */}
             <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4">
+              <form onSubmit={handleSignup} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <Input
@@ -205,7 +199,7 @@ const Auth = () => {
                   <Input
                     id="signup-password"
                     type="password"
-                    placeholder="Create a password (min 6 characters)"
+                    placeholder="Buat password (min. 6 karakter)"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoading}
@@ -217,7 +211,7 @@ const Auth = () => {
                   <Input
                     id="confirm-password"
                     type="password"
-                    placeholder="Confirm your password"
+                    placeholder="Konfirmasi password Anda"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     disabled={isLoading}
@@ -231,7 +225,7 @@ const Auth = () => {
             </TabsContent>
           </Tabs>
         </CardContent>
-        
+
         <CardFooter className="flex flex-col space-y-2">
           <div className="text-sm text-muted-foreground text-center">
             By continuing, you agree to our Terms of Service and Privacy Policy

@@ -1,43 +1,25 @@
-import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Upload, Languages, Settings, LogOut } from "lucide-react";
+import { Upload, Languages, LogOut, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthStore } from "@/store/authStore";
+import { logoutApi } from "@/api/auth";
 
 const Header = () => {
-  const [user, setUser] = useState(null);
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  useEffect(() => {
-    // Check current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const { isAuthenticated, user, logout } = useAuthStore();
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to log out",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Success",
-        description: "Logged out successfully",
-      });
-      navigate("/auth");
+    try {
+      // Tell backend to invalidate JWT (add jti to Redis blocklist)
+      await logoutApi();
+    } catch {
+      // Even if backend call fails, clear local state
+    } finally {
+      logout();
+      toast({ title: "Logout berhasil", description: "Sampai jumpa!" });
+      navigate("/auth", { replace: true });
     }
   };
 
@@ -45,34 +27,52 @@ const Header = () => {
     <header className="border-b border-border bg-card/50 backdrop-blur-sm">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
-                <Languages className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">TranscriptCrowd</h1>
-                <p className="text-xs text-muted-foreground">Collaborative Translation Platform</p>
-              </div>
+          <div
+            className="flex items-center space-x-2 cursor-pointer"
+            onClick={() => navigate("/")}
+          >
+            <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
+              <Languages className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">TranscriptCrowd</h1>
+              <p className="text-xs text-muted-foreground">Collaborative Translation Platform</p>
             </div>
           </div>
-          
-          <nav className="hidden md:flex items-center space-x-6">
-            <a href="/" className="text-foreground hover:text-primary transition-smooth">Dashboard</a>
-            <a href="/upload" className="text-foreground hover:text-primary transition-smooth">Upload</a>
-            <a href="/transcribe" className="text-foreground hover:text-primary transition-smooth">Transcribe</a>
-            <a href="/translate" className="text-foreground hover:text-primary transition-smooth">Translate</a>
-            <a href="/admin" className="text-foreground hover:text-primary transition-smooth">Admin</a>
-          </nav>
-          
+
+          {isAuthenticated && (
+            <nav className="hidden md:flex items-center space-x-6">
+              <a href="/" className="text-foreground hover:text-primary transition-smooth">
+                Dashboard
+              </a>
+              <a href="/upload" className="text-foreground hover:text-primary transition-smooth">
+                Upload
+              </a>
+              {user?.role === "admin" && (
+                <a href="/admin" className="text-foreground hover:text-primary transition-smooth flex items-center gap-1">
+                  <ShieldCheck className="w-4 h-4" />
+                  Admin
+                </a>
+              )}
+            </nav>
+          )}
+
           <div className="flex items-center space-x-3">
-            {user ? (
+            {isAuthenticated ? (
               <>
-                <Button variant="outline" size="sm">
-                  <Settings className="w-4 h-4" />
-                  Profile
-                </Button>
-                <Button variant="academic" size="sm" onClick={() => navigate("/upload")}>
+                <span className="hidden md:block text-sm text-muted-foreground">
+                  {user?.name}
+                  {user?.role === "admin" && (
+                    <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      Admin
+                    </span>
+                  )}
+                </span>
+                <Button
+                  variant="academic"
+                  size="sm"
+                  onClick={() => navigate("/upload")}
+                >
                   <Upload className="w-4 h-4" />
                   New Project
                 </Button>
