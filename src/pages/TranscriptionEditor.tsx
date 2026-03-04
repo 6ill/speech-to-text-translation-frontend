@@ -16,14 +16,16 @@ import {
     Languages,
     Loader2,
     AlertCircle,
-    CheckCircle2,
     Edit3,
     RotateCcw,
+    ArrowLeft,
+    ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
     getSegmentsApi,
     getFileUrlApi,
+    getFileByIdApi,
     submitTranscriptionCorrectionsApi,
     triggerTranslationApi,
 } from "@/api/files";
@@ -65,13 +67,15 @@ function SegmentRow({
         }
       `}
         >
-            {/* Timestamp — click to seek */}
+            {/* Timestamp range — click to seek */}
             <button
-                className="shrink-0 text-xs font-mono text-primary hover:underline mt-1 w-10 text-left"
+                className="shrink-0 text-xs font-mono text-primary hover:underline mt-1 text-left w-24"
                 onClick={() => onSeek(segment.start_timestamp)}
                 title="Seek to this segment"
             >
                 {formatTime(segment.start_timestamp)}
+                <span className="text-muted-foreground"> – </span>
+                {formatTime(segment.end_timestamp)}
             </button>
 
             {/* Editable text */}
@@ -80,9 +84,9 @@ function SegmentRow({
                     value={localText}
                     onChange={(e) => onChange(segment.id, e.target.value)}
                     className={`
-                        min-h-0 resize-none text-sm leading-relaxed py-1 px-2
-                        ${isDirty ? "border-amber-400 focus-visible:ring-amber-400" : ""}
-                    `}
+            min-h-0 resize-none text-sm leading-relaxed py-1 px-2
+            ${isDirty ? "border-amber-400 focus-visible:ring-amber-400" : ""}
+          `}
                     rows={Math.max(2, Math.ceil(localText.length / 80))}
                 />
                 {isDirty && (
@@ -105,6 +109,7 @@ function SegmentRow({
     );
 }
 
+
 const TranscriptionEditor = () => {
     const { id: fileId } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -117,8 +122,15 @@ const TranscriptionEditor = () => {
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
 
-    //  Local edits map: segmentId → text ──
     const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
+
+    const { data: fileData } = useQuery({
+        queryKey: ["file", fileId],
+        queryFn: () => getFileByIdApi(fileId!),
+        enabled: !!fileId,
+    });
+    const fileStatus = fileData?.data?.status;
+    const isAlreadyTranslated = fileStatus === "translated";
 
     const { data, isLoading, isError } = useQuery({
         queryKey: ["segments", fileId],
@@ -130,19 +142,17 @@ const TranscriptionEditor = () => {
         queryKey: ["fileUrl", fileId],
         queryFn: () => getFileUrlApi(fileId!),
         enabled: !!fileId,
-        staleTime: 1000 * 60 * 50, // 50 min — URL valid 1 hour
+        staleTime: 1000 * 60 * 50,
     });
 
     const segments: Segment[] = data?.data?.segments ?? [];
     const audioUrl = urlData?.data?.download_url ?? "";
 
-    // ── Init local edits when segments load ──
     useEffect(() => {
         if (segments.length > 0) {
             setLocalEdits((prev) => {
                 const init: Record<string, string> = {};
                 segments.forEach((s) => {
-                    // Preserve existing edits if already set
                     init[s.id] = prev[s.id] ?? s.transcription_text;
                 });
                 return init;
@@ -216,14 +226,14 @@ const TranscriptionEditor = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["segments", fileId] });
             toast({
-                title: "Corrections saved!",
-                description: `Modified ${dirtySegments.length} segment.`,
+                title: "Changes saved",
+                description: `${dirtySegments.length} segment(s) updated.`,
             });
         },
         onError: () => {
             toast({
-                title: "Failed to save corrections",
-                description: "Try again.",
+                title: "Failed to save",
+                description: "Please try again.",
                 variant: "destructive",
             });
         },
@@ -243,20 +253,21 @@ const TranscriptionEditor = () => {
             mutationFn: () => triggerTranslationApi(fileId!),
             onSuccess: () => {
                 toast({
-                    title: "Start translating!",
+                    title: "Translation started!",
                     description:
-                        "Process is running in the background. Check the dashboard for status.",
+                        "The process is running in the background. Check the dashboard for status.",
                 });
                 navigate("/");
             },
             onError: () => {
                 toast({
-                    title: "Failed to start translating",
+                    title: "Failed to start translation",
                     variant: "destructive",
                 });
             },
         },
     );
+
 
     if (isLoading) {
         return (
@@ -264,7 +275,7 @@ const TranscriptionEditor = () => {
                 <Header />
                 <div className="flex items-center justify-center py-24 gap-3 text-muted-foreground">
                     <Loader2 className="w-6 h-6 animate-spin" />
-                    <span>Load transcription...</span>
+                    <span>Loading transcription...</span>
                 </div>
             </div>
         );
@@ -276,7 +287,7 @@ const TranscriptionEditor = () => {
                 <Header />
                 <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
                     <AlertCircle className="w-8 h-8" />
-                    <p>Transcription is not yet available or an error occurred.</p>
+                    <p>Transcription not available or an error occurred.</p>
                     <Button variant="outline" onClick={() => navigate("/")}>
                         Back to Dashboard
                     </Button>
@@ -289,20 +300,31 @@ const TranscriptionEditor = () => {
         <div className="min-h-screen bg-background">
             <Header />
 
-            {/* Hidden audio element */}
             <audio ref={audioRef} src={audioUrl} preload="metadata" />
 
             <main className="container mx-auto px-4 py-6">
                 {/* Page header */}
                 <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-foreground">
-                            Transcription Editor
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
-                            {segments.length} segments
-                        </p>
+                    <div className="flex items-center gap-3">
+                        {/* Back to Dashboard */}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate("/")}
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-1" />
+                            Dashboard
+                        </Button>
+                        <div>
+                            <h1 className="text-2xl font-bold text-foreground">
+                                Transcription Editor
+                            </h1>
+                            <p className="text-sm text-muted-foreground">
+                                {segments.length} segments
+                            </p>
+                        </div>
                     </div>
+
                     <div className="flex items-center gap-2">
                         {dirtySegments.length > 0 && (
                             <Badge
@@ -324,22 +346,38 @@ const TranscriptionEditor = () => {
                             )}
                             Save Changes
                         </Button>
-                        <Button
-                            onClick={() => triggerTranslation()}
-                            disabled={isTriggering || dirtySegments.length > 0}
-                            title={
-                                dirtySegments.length > 0
-                                    ? "Simpan dulu sebelum lanjut ke terjemahan"
-                                    : ""
-                            }
-                        >
-                            {isTriggering ? (
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                                <Languages className="w-4 h-4 mr-2" />
-                            )}
-                            Proceed to Translation
-                        </Button>
+
+                        {/* Smart translate button: "Go to Translation" if already translated, else "Proceed to Translation" */}
+                        {isAlreadyTranslated ? (
+                            <Button
+                                variant="outline"
+                                onClick={() =>
+                                    navigate(`/file/${fileId}/translate`)
+                                }
+                            >
+                                <ArrowRight className="w-4 h-4 mr-2" />
+                                Go to Translation
+                            </Button>
+                        ) : (
+                            <Button
+                                onClick={() => triggerTranslation()}
+                                disabled={
+                                    isTriggering || dirtySegments.length > 0
+                                }
+                                title={
+                                    dirtySegments.length > 0
+                                        ? "Save changes before proceeding to translation"
+                                        : ""
+                                }
+                            >
+                                {isTriggering ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                    <Languages className="w-4 h-4 mr-2" />
+                                )}
+                                Proceed to Translation
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -374,13 +412,11 @@ const TranscriptionEditor = () => {
                                     />
                                 </div>
 
-                                {/* Time */}
                                 <div className="flex justify-between text-xs text-muted-foreground font-mono">
                                     <span>{formatTime(currentTime)}</span>
                                     <span>{formatTime(duration)}</span>
                                 </div>
 
-                                {/* Controls */}
                                 <div className="flex items-center justify-center gap-2">
                                     <Button
                                         variant="outline"
@@ -418,7 +454,6 @@ const TranscriptionEditor = () => {
                                     </Button>
                                 </div>
 
-                                {/* Playback speed */}
                                 <div>
                                     <p className="text-xs text-muted-foreground text-center mb-2">
                                         Playback Speed
@@ -442,12 +477,12 @@ const TranscriptionEditor = () => {
                                     </div>
                                 </div>
 
-                                {/* Save reminder */}
                                 {dirtySegments.length > 0 && (
                                     <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg p-2">
-                                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                        <Save className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                                         <span>
-                                            Save changes before proceeding to translation.
+                                            Save changes before proceeding to
+                                            translation.
                                         </span>
                                     </div>
                                 )}

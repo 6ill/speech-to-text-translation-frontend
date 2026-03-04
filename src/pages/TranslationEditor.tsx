@@ -17,6 +17,8 @@ import {
     AlertCircle,
     Edit3,
     RotateCcw,
+    ArrowLeft,
+    Mic,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -62,27 +64,28 @@ function TranslationSegmentRow({
         }
       `}
         >
-            {/* Timestamp */}
+            {/* Timestamp range */}
             <button
                 className="text-xs font-mono text-primary hover:underline"
                 onClick={() => onSeek(segment.start_timestamp)}
             >
-                {formatTime(segment.start_timestamp)} –{" "}
+                {formatTime(segment.start_timestamp)}
+                <span className="text-muted-foreground"> – </span>
                 {formatTime(segment.end_timestamp)}
             </button>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Source: Indonesian transcription (read-only) */}
+                {/* Source: Indonesian (read-only) */}
                 <div className="space-y-1">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Indonesia
+                        Indonesian
                     </p>
                     <div className="text-sm leading-relaxed text-foreground bg-muted/40 rounded-md p-2 min-h-[60px]">
                         {segment.transcription_text}
                     </div>
                 </div>
 
-                {/* Target: English translation (editable) */}
+                {/* Target: English (editable) */}
                 <div className="space-y-1">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         English
@@ -134,7 +137,6 @@ const TranslationEditor = () => {
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
 
-    // Local edits: segmentId → translated text ──
     const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
 
     const { data, isLoading, isError } = useQuery({
@@ -152,8 +154,6 @@ const TranslationEditor = () => {
 
     const segments: Segment[] = data?.data?.segments ?? [];
     const audioUrl = urlData?.data?.download_url ?? "";
-
-    // Check that translation data actually exists
     const hasTranslation = segments.some((s) => s.translation_text !== null);
 
     useEffect(() => {
@@ -234,14 +234,14 @@ const TranslationEditor = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["segments", fileId] });
             toast({
-                title: "Koreksi terjemahan disimpan!",
-                description: `${dirtySegments.length} segmen diperbarui.`,
+                title: "Translation corrections saved",
+                description: `${dirtySegments.length} segment(s) updated.`,
             });
         },
         onError: () => {
             toast({
-                title: "Gagal menyimpan",
-                description: "Coba lagi.",
+                title: "Failed to save",
+                description: "Please try again.",
                 variant: "destructive",
             });
         },
@@ -263,7 +263,7 @@ const TranslationEditor = () => {
                 <Header />
                 <div className="flex items-center justify-center py-24 gap-3 text-muted-foreground">
                     <Loader2 className="w-6 h-6 animate-spin" />
-                    <span>Memuat terjemahan...</span>
+                    <span>Loading translation...</span>
                 </div>
             </div>
         );
@@ -277,11 +277,11 @@ const TranslationEditor = () => {
                     <AlertCircle className="w-8 h-8" />
                     <p>
                         {isError
-                            ? "Terjadi kesalahan saat memuat data."
-                            : "Terjemahan belum tersedia untuk file ini."}
+                            ? "An error occurred while loading data."
+                            : "Translation is not yet available for this file."}
                     </p>
                     <Button variant="outline" onClick={() => navigate("/")}>
-                        Kembali ke Dashboard
+                        Back to Dashboard
                     </Button>
                 </div>
             </div>
@@ -297,14 +297,27 @@ const TranslationEditor = () => {
             <main className="container mx-auto px-4 py-6">
                 {/* Page header */}
                 <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-foreground">
-                            Translation Editor
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
-                            {segments.length} segmen · Indonesian → English
-                        </p>
+                    <div className="flex items-center gap-3">
+                        {/* Back to Dashboard */}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate("/")}
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-1" />
+                            Dashboard
+                        </Button>
+                        <div>
+                            <h1 className="text-2xl font-bold text-foreground">
+                                Translation Editor
+                            </h1>
+                            <p className="text-sm text-muted-foreground">
+                                {segments.length} segments · Indonesian →
+                                English
+                            </p>
+                        </div>
                     </div>
+
                     <div className="flex items-center gap-2">
                         {dirtySegments.length > 0 && (
                             <Badge
@@ -314,8 +327,17 @@ const TranslationEditor = () => {
                                 {dirtySegments.length} unsaved
                             </Badge>
                         )}
+                        {/* Go to Transcription */}
                         <Button
                             variant="outline"
+                            onClick={() =>
+                                navigate(`/file/${fileId}/transcribe`)
+                            }
+                        >
+                            <Mic className="w-4 h-4 mr-2" />
+                            Go to Transcription
+                        </Button>
+                        <Button
                             onClick={handleSave}
                             disabled={dirtySegments.length === 0 || isSaving}
                         >
@@ -433,7 +455,7 @@ const TranslationEditor = () => {
                         <Card className="border-primary/10">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-base">
-                                    Segmen Terjemahan
+                                    Translation Segments
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
