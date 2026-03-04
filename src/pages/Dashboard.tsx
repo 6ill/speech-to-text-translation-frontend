@@ -1,203 +1,238 @@
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/Header";
-import HeroSection from "@/components/HeroSection";
-import ProjectCard from "@/components/ProjectCard";
-import UploadSection from "@/components/UploadSection";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, Clock, Users, Award, TrendingUp } from "lucide-react";
+import {
+    Card,
+    CardContent,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+    Upload,
+    Clock,
+    FileAudio,
+    Loader2,
+    AlertCircle,
+    Languages,
+    Mic,
+} from "lucide-react";
+import { getFilesApi } from "@/api/files";
+import { FileRecord, FileStatus, POLLING_STATUSES } from "@/types";
+import { formatDistanceToNow } from "date-fns";
+
+const STATUS_CONFIG: Record<FileStatus, { label: string; className: string }> =
+    {
+        uploading: { label: "Uploading", className: "bg-gray-500 text-white" },
+        uploaded: { label: "Uploaded", className: "bg-blue-400 text-white" },
+        transcribing: { label: "Transcribing", className: "bg-blue-600 text-white" },
+        transcribed: { label: "Transcribed", className: "bg-green-600 text-white" },
+        translating: { label: "Translating", className: "bg-amber-500 text-white" },
+        translated: { label: "Translated", className: "bg-emerald-600 text-white" }
+    };
+
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDuration(seconds: number): string {
+    if (!seconds) return "--:--";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+
+function FileCard({ file }: { file: FileRecord }) {
+    const navigate = useNavigate();
+    const isProcessing = POLLING_STATUSES.includes(file.status);
+    const config = STATUS_CONFIG[file.status];
+
+    const handleAction = () => {
+        if (file.status === "transcribed") {
+            navigate(`/file/${file.id}/transcribe`);
+        } else if (file.status === "translated") {
+            navigate(`/file/${file.id}/translate`);
+        }
+    };
+
+    const canNavigate = file.status === "transcribed" || file.status === "translated";
+
+    return (
+        <Card className="border-primary/10 bg-gradient-card hover:shadow-elegant transition-smooth">
+            <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base text-foreground line-clamp-2 leading-snug">
+                        {file.file_name}
+                    </CardTitle>
+                    <Badge
+                        className={`shrink-0 border-0 text-xs ${config.className}`}
+                    >
+                        {isProcessing && (
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        )}
+                        {config.label}
+                    </Badge>
+                </div>
+            </CardHeader>
+
+            <CardContent className="space-y-2 pb-3">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        <span>{formatDuration(file.duration_seconds)}</span>
+                    </div>
+                    <span>{formatBytes(file.file_size)}</span>
+                </div>
+
+                {file.speaker && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Mic className="w-3 h-3" />
+                        <span>{file.speaker.name}</span>
+                    </div>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                    {formatDistanceToNow(new Date(file.created_at), {
+                        addSuffix: true,
+                    })}
+                </p>
+            </CardContent>
+
+            <CardFooter className="pt-0 flex gap-2">
+                {file.status === "translated" && (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs"
+                        onClick={() => navigate(`/file/${file.id}/transcribe`)}
+                    >
+                        <Mic className="w-3 h-3 mr-1" />
+                        Transcription
+                    </Button>
+                )}
+                <Button
+                    size="sm"
+                    className="flex-1 text-xs"
+                    disabled={!canNavigate}
+                    onClick={handleAction}
+                >
+                    {isProcessing ? (
+                        <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            Processing...
+                        </>
+                    ) : canNavigate ? (
+                        <>
+                            <Languages className="w-3 h-3 mr-1" />
+                            {file.status === "translated"
+                                ? "Translation"
+                                : "Open Editor"}
+                        </>
+                    ) : (
+                        "Waiting..."
+                    )}
+                </Button>
+            </CardFooter>
+        </Card>
+    );
+}
 
 const Dashboard = () => {
-  const recentProjects = [
-    {
-      title: "Kuliah Algoritma dan Struktur Data - Pertemuan 5",
-      duration: "1h 23m",
-      status: "translating" as const,
-      uploadedDate: "Jan 14, 2025"
-    },
-    {
-      title: "Seminar Machine Learning - Deep Learning Fundamentals",
-      duration: "2h 15m",
-      status: "translated" as const,
-      uploadedDate: "Jan 13, 2025"
-    },
-    {
-      title: "Workshop React Native - Mobile Development",
-      duration: "45m",
-      status: "transcribing" as const,
-      uploadedDate: "Jan 15, 2025"
-    }
-  ];
+    const navigate = useNavigate();
 
-  return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <HeroSection />
-      
-      <main className="container mx-auto px-4 py-12">
-        <Tabs defaultValue="overview" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="projects">My Projects</TabsTrigger>
-            <TabsTrigger value="upload">Upload New</TabsTrigger>
-            <TabsTrigger value="community">Community</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="overview" className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="border-primary/10 bg-gradient-card">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
-                  <BarChart3 className="h-4 w-4 text-primary" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-foreground">12</div>
-                  <p className="text-xs text-muted-foreground">+3 from last month</p>
-                </CardContent>
-              </Card>
-              
-              <Card className="border-primary/10 bg-gradient-card">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Hours Transcribed</CardTitle>
-                  <Clock className="h-4 w-4 text-accent" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-foreground">147.5</div>
-                  <p className="text-xs text-muted-foreground">+12.3 this week</p>
-                </CardContent>
-              </Card>
-              
-              <Card className="border-primary/10 bg-gradient-card">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Contributors</CardTitle>
-                  <Users className="h-4 w-4 text-academic-teal" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-foreground">89</div>
-                  <p className="text-xs text-muted-foreground">+5 new this month</p>
-                </CardContent>
-              </Card>
-              
-              <Card className="border-primary/10 bg-gradient-card">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Quality Score</CardTitle>
-                  <Award className="h-4 w-4 text-yellow-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-foreground">94.2%</div>
-                  <p className="text-xs text-muted-foreground">+2.1% improvement</p>
-                </CardContent>
-              </Card>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <Card className="border-primary/10 bg-gradient-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <TrendingUp className="w-5 h-5 text-primary" />
-                    <span>Recent Activity</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                      <div>
-                        <p className="font-medium text-foreground">Translation completed</p>
-                        <p className="text-sm text-muted-foreground">Deep Learning Fundamentals</p>
-                      </div>
-                      <span className="text-xs text-muted-foreground">2h ago</span>
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ["files"],
+        queryFn: () => getFilesApi(1, 50),
+        // Poll every 5 seconds if any file is still processing
+        refetchInterval: (query) => {
+            const files: FileRecord[] = query.state.data?.data ?? [];
+            const hasProcessing = files.some((f) =>
+                POLLING_STATUSES.includes(f.status),
+            );
+            return hasProcessing ? 5000 : false;
+        },
+    });
+
+    const files = data?.data ?? [];
+
+    return (
+        <div className="min-h-screen bg-background">
+            <Header />
+
+            <main className="container mx-auto px-4 py-8">
+                {/* Header row */}
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground mb-1">
+                            My Files
+                        </h1>
+                        <p className="text-muted-foreground">
+                            Manage your audio files and transcriptions
+                        </p>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                      <div>
-                        <p className="font-medium text-foreground">New contributor joined</p>
-                        <p className="text-sm text-muted-foreground">Algoritma dan Struktur Data</p>
-                      </div>
-                      <span className="text-xs text-muted-foreground">4h ago</span>
+                    <Button
+                        onClick={() => navigate("/upload")}
+                        className="gap-2"
+                    >
+                        <Upload className="w-4 h-4" />
+                        Upload New
+                    </Button>
+                </div>
+
+                {/* Loading state */}
+                {isLoading && (
+                    <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p>Loading your files...</p>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                      <div>
-                        <p className="font-medium text-foreground">Transcription improved</p>
-                        <p className="text-sm text-muted-foreground">Mobile Development Workshop</p>
-                      </div>
-                      <span className="text-xs text-muted-foreground">1d ago</span>
+                )}
+
+                {/* Error state */}
+                {isError && (
+                    <div className="flex flex-col items-center justify-center py-24 gap-3 text-destructive">
+                        <AlertCircle className="w-8 h-8" />
+                        <p>Failed to load files. Please try refreshing.</p>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="border-primary/10 bg-gradient-card">
-                <CardHeader>
-                  <CardTitle>Community Leaderboard</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center text-white font-bold text-sm">1</div>
-                        <div>
-                          <p className="font-medium text-foreground">Sarah Ahmad</p>
-                          <p className="text-sm text-muted-foreground">2,340 points</p>
+                )}
+
+                {/* Empty state */}
+                {!isLoading && !isError && files.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-24 gap-4 text-muted-foreground">
+                        <FileAudio className="w-16 h-16 opacity-30" />
+                        <div className="text-center">
+                            <p className="text-lg font-medium text-foreground">
+                                No files yet
+                            </p>
+                            <p className="text-sm">
+                                Upload an audio or video file to get started.
+                            </p>
                         </div>
-                      </div>
-                      <Award className="w-5 h-5 text-yellow-500" />
+                        <Button
+                            onClick={() => navigate("/upload")}
+                            variant="outline"
+                        >
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload your first file
+                        </Button>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white font-bold text-sm">2</div>
-                        <div>
-                          <p className="font-medium text-foreground">Budi Santoso</p>
-                          <p className="text-sm text-muted-foreground">1,890 points</p>
-                        </div>
-                      </div>
-                      <Award className="w-5 h-5 text-gray-400" />
+                )}
+
+                {/* File grid */}
+                {!isLoading && files.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {files.map((file) => (
+                            <FileCard key={file.id} file={file} />
+                        ))}
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm">3</div>
-                        <div>
-                          <p className="font-medium text-foreground">Maya Putri</p>
-                          <p className="text-sm text-muted-foreground">1,675 points</p>
-                        </div>
-                      </div>
-                      <Award className="w-5 h-5 text-orange-500" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="projects" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-foreground">My Projects</h2>
-              <Button variant="academic">Create New Project</Button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {recentProjects.map((project, index) => (
-                <ProjectCard key={index} {...project} />
-              ))}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="upload">
-            <UploadSection />
-          </TabsContent>
-          
-          <TabsContent value="community" className="space-y-6">
-            <div className="text-center py-12">
-              <h2 className="text-2xl font-bold text-foreground mb-4">Community Projects</h2>
-              <p className="text-muted-foreground mb-8">Explore and contribute to projects from other users</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {recentProjects.map((project, index) => (
-                  <ProjectCard key={index} {...project} />
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </main>
-    </div>
-  );
+                )}
+            </main>
+        </div>
+    );
 };
 
 export default Dashboard;

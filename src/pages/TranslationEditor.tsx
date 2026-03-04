@@ -1,371 +1,475 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Play, Pause, SkipBack, SkipForward, Save, Languages, Volume2, ArrowRight, Edit, X, Check } from "lucide-react";
+import {
+    Play,
+    Pause,
+    SkipBack,
+    SkipForward,
+    Volume2,
+    Save,
+    Loader2,
+    AlertCircle,
+    Edit3,
+    RotateCcw,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+    getSegmentsApi,
+    getFileUrlApi,
+    submitTranslationCorrectionsApi,
+} from "@/api/files";
+import { Segment, CorrectionSubmit } from "@/types";
+
+function formatTime(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+interface TranslationSegmentRowProps {
+    segment: Segment;
+    isActive: boolean;
+    localTranslation: string;
+    isDirty: boolean;
+    onSeek: (time: number) => void;
+    onChange: (id: string, text: string) => void;
+    onReset: (id: string) => void;
+}
+
+function TranslationSegmentRow({
+    segment,
+    isActive,
+    localTranslation,
+    isDirty,
+    onSeek,
+    onChange,
+    onReset,
+}: TranslationSegmentRowProps) {
+    return (
+        <div
+            className={`
+        rounded-lg border p-3 transition-colors space-y-3
+        ${
+            isActive
+                ? "border-primary/40 bg-primary/5"
+                : "border-border hover:border-border/80"
+        }
+      `}
+        >
+            {/* Timestamp */}
+            <button
+                className="text-xs font-mono text-primary hover:underline"
+                onClick={() => onSeek(segment.start_timestamp)}
+            >
+                {formatTime(segment.start_timestamp)} –{" "}
+                {formatTime(segment.end_timestamp)}
+            </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Source: Indonesian transcription (read-only) */}
+                <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Indonesia
+                    </p>
+                    <div className="text-sm leading-relaxed text-foreground bg-muted/40 rounded-md p-2 min-h-[60px]">
+                        {segment.transcription_text}
+                    </div>
+                </div>
+
+                {/* Target: English translation (editable) */}
+                <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        English
+                    </p>
+                    <Textarea
+                        value={localTranslation}
+                        onChange={(e) => onChange(segment.id, e.target.value)}
+                        placeholder="Translation..."
+                        className={`
+              text-sm resize-none min-h-[60px]
+              ${isDirty ? "border-amber-400 focus-visible:ring-amber-400" : ""}
+            `}
+                        rows={Math.max(
+                            2,
+                            Math.ceil(localTranslation.length / 60),
+                        )}
+                    />
+                    {isDirty && (
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs text-amber-600 flex items-center gap-1">
+                                <Edit3 className="w-3 h-3" />
+                                Edited
+                            </span>
+                            <button
+                                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                onClick={() => onReset(segment.id)}
+                            >
+                                <RotateCcw className="w-3 h-3" />
+                                Reset
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 
 const TranslationEditor = () => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [editingSegment, setEditingSegment] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
-  const duration = 83; // 1:23 in seconds
+    const { id: fileId } = useParams<{ id: string }>();
+    const navigate = useNavigate();
+    const { toast } = useToast();
+    const queryClient = useQueryClient();
 
-  const [transcriptionSegments] = useState([
-    {
-      id: "1",
-      startTime: 0,
-      endTime: 15,
-      text: "Selamat pagi semuanya, hari ini kita akan membahas tentang algoritma sorting.",
-      confidence: 95
-    },
-    {
-      id: "2", 
-      startTime: 15,
-      endTime: 35,
-      text: "Algoritma sorting adalah proses pengurutan data dari yang terkecil ke terbesar atau sebaliknya.",
-      confidence: 92
-    },
-    {
-      id: "3",
-      startTime: 35,
-      endTime: 55,
-      text: "Ada beberapa jenis algoritma sorting yang akan kita pelajari hari ini.",
-      confidence: 88
-    },
-    {
-      id: "4",
-      startTime: 55,
-      endTime: 83,
-      text: "Yaitu bubble sort, selection sort, dan insertion sort. Mari kita mulai dengan bubble sort.",
-      confidence: 91
-    }
-  ]);
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [playbackRate, setPlaybackRate] = useState(1);
 
-  const [translationSegments, setTranslationSegments] = useState([
-    {
-      id: "1",
-      startTime: 0,
-      endTime: 15,
-      text: "Good morning everyone, today we will discuss about sorting algorithms.",
-      originalText: "Good morning everyone, today we will discuss sorting algorithm.",
-      isEdited: true,
-      editedBy: "Sarah A.",
-      confidence: 89
-    },
-    {
-      id: "2",
-      startTime: 15, 
-      endTime: 35,
-      text: "Sorting algorithm is the process of arranging data from smallest to largest or vice versa.",
-      confidence: 94
-    },
-    {
-      id: "3",
-      startTime: 35,
-      endTime: 55,
-      text: "There are several types of sorting algorithms that we will learn today.",
-      confidence: 92
-    },
-    {
-      id: "4",
-      startTime: 55,
-      endTime: 83,
-      text: "Namely bubble sort, selection sort, and insertion sort. Let's start with bubble sort.",
-      confidence: 88
-    }
-  ]);
+    // Local edits: segmentId → translated text ──
+    const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ["segments", fileId],
+        queryFn: () => getSegmentsApi(fileId!),
+        enabled: !!fileId,
+    });
 
-  const handleTranslationEdit = (segmentId: string, newText: string) => {
-    setTranslationSegments(prev => 
-      prev.map(segment => 
-        segment.id === segmentId 
-          ? { 
-              ...segment, 
-              originalText: segment.originalText || segment.text,
-              text: newText, 
-              isEdited: true,
-              editedBy: "Current User"
-            }
-          : segment
-      )
+    const { data: urlData } = useQuery({
+        queryKey: ["fileUrl", fileId],
+        queryFn: () => getFileUrlApi(fileId!),
+        enabled: !!fileId,
+        staleTime: 1000 * 60 * 50,
+    });
+
+    const segments: Segment[] = data?.data?.segments ?? [];
+    const audioUrl = urlData?.data?.download_url ?? "";
+
+    // Check that translation data actually exists
+    const hasTranslation = segments.some((s) => s.translation_text !== null);
+
+    useEffect(() => {
+        if (segments.length > 0) {
+            setLocalEdits((prev) => {
+                const init: Record<string, string> = {};
+                segments.forEach((s) => {
+                    init[s.id] = prev[s.id] ?? s.translation_text ?? "";
+                });
+                return init;
+            });
+        }
+    }, [segments.length]);
+
+    const activeSegmentId = segments.find(
+        (s) =>
+            currentTime >= s.start_timestamp && currentTime < s.end_timestamp,
+    )?.id;
+
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        const onTime = () => setCurrentTime(audio.currentTime);
+        const onLoaded = () => setDuration(audio.duration);
+        const onEnded = () => setIsPlaying(false);
+        audio.addEventListener("timeupdate", onTime);
+        audio.addEventListener("loadedmetadata", onLoaded);
+        audio.addEventListener("ended", onEnded);
+        return () => {
+            audio.removeEventListener("timeupdate", onTime);
+            audio.removeEventListener("loadedmetadata", onLoaded);
+            audio.removeEventListener("ended", onEnded);
+        };
+    }, []);
+
+    const togglePlay = () => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        if (isPlaying) {
+            audio.pause();
+        } else {
+            audio.play();
+        }
+        setIsPlaying(!isPlaying);
+    };
+
+    const seek = useCallback((time: number) => {
+        if (audioRef.current) {
+            audioRef.current.currentTime = time;
+            setCurrentTime(time);
+        }
+    }, []);
+
+    const changeRate = (rate: number) => {
+        setPlaybackRate(rate);
+        if (audioRef.current) audioRef.current.playbackRate = rate;
+    };
+
+    const handleChange = (segmentId: string, text: string) => {
+        setLocalEdits((prev) => ({ ...prev, [segmentId]: text }));
+    };
+
+    const handleReset = (segmentId: string) => {
+        const original =
+            segments.find((s) => s.id === segmentId)?.translation_text ?? "";
+        setLocalEdits((prev) => ({ ...prev, [segmentId]: original }));
+    };
+
+    const dirtySegments = segments.filter(
+        (s) =>
+            localEdits[s.id] !== undefined &&
+            localEdits[s.id] !== (s.translation_text ?? ""),
     );
-  };
 
-  const handleEdit = (segment: any) => {
-    setEditingSegment(segment.id);
-    setEditText(segment.text);
-  };
+    const { mutate: submitCorrections, isPending: isSaving } = useMutation({
+        mutationFn: (corrections: CorrectionSubmit[]) =>
+            submitTranslationCorrectionsApi(corrections),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["segments", fileId] });
+            toast({
+                title: "Koreksi terjemahan disimpan!",
+                description: `${dirtySegments.length} segmen diperbarui.`,
+            });
+        },
+        onError: () => {
+            toast({
+                title: "Gagal menyimpan",
+                description: "Coba lagi.",
+                variant: "destructive",
+            });
+        },
+    });
 
-  const handleSave = (segmentId: string) => {
-    handleTranslationEdit(segmentId, editText);
-    setEditingSegment(null);
-    setEditText("");
-  };
+    const handleSave = () => {
+        if (dirtySegments.length === 0) return;
+        const corrections: CorrectionSubmit[] = dirtySegments.map((s) => ({
+            segment_id: s.id,
+            corrected_text: localEdits[s.id],
+        }));
+        submitCorrections(corrections);
+    };
 
-  const handleCancel = () => {
-    setEditingSegment(null);
-    setEditText("");
-  };
 
-  return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Translation Editor</h1>
-              <p className="text-muted-foreground">Kuliah Algoritma dan Struktur Data - Pertemuan 5</p>
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-background">
+                <Header />
+                <div className="flex items-center justify-center py-24 gap-3 text-muted-foreground">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span>Memuat terjemahan...</span>
+                </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Badge className="bg-academic-teal text-white">In Progress</Badge>
-              <ArrowRight className="w-4 h-4 text-muted-foreground" />
-              <Badge variant="outline">Translation Phase</Badge>
+        );
+    }
+
+    if (isError || !hasTranslation) {
+        return (
+            <div className="min-h-screen bg-background">
+                <Header />
+                <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
+                    <AlertCircle className="w-8 h-8" />
+                    <p>
+                        {isError
+                            ? "Terjadi kesalahan saat memuat data."
+                            : "Terjemahan belum tersedia untuk file ini."}
+                    </p>
+                    <Button variant="outline" onClick={() => navigate("/")}>
+                        Kembali ke Dashboard
+                    </Button>
+                </div>
             </div>
-          </div>
-        </div>
+        );
+    }
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Audio Player */}
-          <div className="lg:col-span-1">
-            <Card className="border-primary/10 bg-gradient-card sticky top-4">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Volume2 className="w-5 h-5 text-primary" />
-                  <span>Audio Player</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Waveform placeholder */}
-                <div className="h-24 bg-secondary rounded-lg flex items-center justify-center">
-                  <div className="flex items-end space-x-1 h-16">
-                    {Array.from({ length: 50 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`w-1 rounded-t transition-smooth ${
-                          i <= (currentTime / duration) * 50 
-                            ? 'bg-primary' 
-                            : 'bg-muted'
-                        }`}
-                        style={{ 
-                          height: `${Math.random() * 60 + 10}%` 
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{formatTime(currentTime)}</span>
-                  <span>{formatTime(duration)}</span>
-                </div>
-                
-                <div className="w-full bg-secondary rounded-full h-2">
-                  <div 
-                    className="bg-primary h-2 rounded-full transition-smooth" 
-                    style={{ width: `${(currentTime / duration) * 100}%` }}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-center space-x-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setCurrentTime(Math.max(0, currentTime - 10))}
-                  >
-                    <SkipBack className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="academic"
-                    onClick={() => setIsPlaying(!isPlaying)}
-                  >
-                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setCurrentTime(Math.min(duration, currentTime + 10))}
-                  >
-                    <SkipForward className="w-4 h-4" />
-                  </Button>
-                </div>
-                
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-2">Playback Speed</p>
-                  <div className="flex justify-center space-x-2">
-                    {['0.75x', '1x', '1.25x', '1.5x'].map((speed) => (
-                      <Button 
-                        key={speed}
-                        variant={speed === '1x' ? 'default' : 'outline'}
-                        size="sm"
-                        className="text-xs"
-                      >
-                        {speed}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+    return (
+        <div className="min-h-screen bg-background">
+            <Header />
 
-          {/* Translation Content */}
-          <div className="lg:col-span-3">
-            <Card className="border-primary/10 bg-gradient-card">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center space-x-2">
-                    <Languages className="w-5 h-5 text-primary" />
-                    <span>Indonesian → English Translation</span>
-                  </CardTitle>
-                  <Button variant="outline">
-                    Export Translation
-                  </Button>
+            <audio ref={audioRef} src={audioUrl} preload="metadata" />
+
+            <main className="container mx-auto px-4 py-6">
+                {/* Page header */}
+                <div className="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground">
+                            Translation Editor
+                        </h1>
+                        <p className="text-sm text-muted-foreground">
+                            {segments.length} segmen · Indonesian → English
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {dirtySegments.length > 0 && (
+                            <Badge
+                                variant="outline"
+                                className="text-amber-600 border-amber-400"
+                            >
+                                {dirtySegments.length} unsaved
+                            </Badge>
+                        )}
+                        <Button
+                            variant="outline"
+                            onClick={handleSave}
+                            disabled={dirtySegments.length === 0 || isSaving}
+                        >
+                            {isSaving ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                                <Save className="w-4 h-4 mr-2" />
+                            )}
+                            Save Changes
+                        </Button>
+                    </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="side-by-side" className="space-y-4">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="side-by-side">Side by Side</TabsTrigger>
-                    <TabsTrigger value="text-only">Text Only</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="side-by-side" className="space-y-4">
-                    <div className="max-h-[600px] overflow-y-auto space-y-4">
-                      {transcriptionSegments.map((segment) => {
-                        const isCurrent = currentTime >= segment.startTime && currentTime <= segment.endTime;
-                        const translationSegment = translationSegments.find(t => t.id === segment.id);
-                        const isEditing = editingSegment === segment.id;
-                        
-                        return (
-                          <Card 
-                            key={segment.id}
-                            className={`border transition-smooth ${
-                              isCurrent ? 'border-primary bg-primary/5' : 'border-border'
-                            }`}
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center space-x-2">
-                                  <Badge variant="outline" className="text-xs">
-                                    {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
-                                  </Badge>
-                                  {isCurrent && (
-                                    <Badge className="text-xs bg-primary text-white">
-                                      Playing
-                                    </Badge>
-                                  )}
-                                </div>
-                                
-                                <div className="flex space-x-1">
-                                  {isEditing ? (
-                                    <>
-                                      <Button variant="outline" size="sm" onClick={handleCancel}>
-                                        <X className="w-3 h-3" />
-                                      </Button>
-                                      <Button variant="academic" size="sm" onClick={() => handleSave(segment.id)}>
-                                        <Check className="w-3 h-3" />
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <Button variant="outline" size="sm" onClick={() => handleEdit(translationSegment!)}>
-                                      <Edit className="w-3 h-3" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <div className="flex items-center space-x-2 mb-2">
-                                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                                    <span className="text-xs font-medium text-muted-foreground uppercase">Indonesian</span>
-                                  </div>
-                                  <p className="text-sm leading-relaxed text-foreground">
-                                    {segment.text}
-                                  </p>
-                                </div>
-                                
-                                <div className="space-y-2 border-l pl-4">
-                                  <div className="flex items-center space-x-2 mb-2">
-                                    <span className="w-2 h-2 bg-academic-teal rounded-full"></span>
-                                    <span className="text-xs font-medium text-muted-foreground uppercase">English</span>
-                                  </div>
-                                  {isEditing ? (
-                                    <Textarea
-                                      value={editText}
-                                      onChange={(e) => setEditText(e.target.value)}
-                                      className="min-h-[80px] text-sm border-primary/20 focus:border-primary"
-                                      placeholder="Edit translation here..."
+
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    {/* ── Audio Player ── */}
+                    <div className="lg:col-span-1">
+                        <Card className="sticky top-4 border-primary/10">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                    <Volume2 className="w-4 h-4 text-primary" />
+                                    Audio Player
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {/* Progress bar */}
+                                <div
+                                    className="w-full h-2 bg-secondary rounded-full cursor-pointer"
+                                    onClick={(e) => {
+                                        const rect =
+                                            e.currentTarget.getBoundingClientRect();
+                                        const ratio =
+                                            (e.clientX - rect.left) /
+                                            rect.width;
+                                        seek(ratio * duration);
+                                    }}
+                                >
+                                    <div
+                                        className="bg-primary h-2 rounded-full transition-none"
+                                        style={{
+                                            width: `${duration ? (currentTime / duration) * 100 : 0}%`,
+                                        }}
                                     />
-                                  ) : (
-                                    <div className="space-y-2">
-                                      <p className="text-sm leading-relaxed text-foreground">
-                                        {translationSegment?.text}
-                                      </p>
-                                      {translationSegment?.originalText && translationSegment.originalText !== translationSegment.text && (
-                                        <div className="p-2 bg-muted rounded text-xs">
-                                          <span className="text-muted-foreground">Original: </span>
-                                          <span className="line-through">{translationSegment.originalText}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
                                 </div>
-                              </div>
+
+                                <div className="flex justify-between text-xs text-muted-foreground font-mono">
+                                    <span>{formatTime(currentTime)}</span>
+                                    <span>{formatTime(duration)}</span>
+                                </div>
+
+                                <div className="flex items-center justify-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            seek(Math.max(0, currentTime - 5))
+                                        }
+                                    >
+                                        <SkipBack className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                        onClick={togglePlay}
+                                        size="sm"
+                                        className="w-10 h-10 rounded-full p-0"
+                                    >
+                                        {isPlaying ? (
+                                            <Pause className="w-4 h-4" />
+                                        ) : (
+                                            <Play className="w-4 h-4" />
+                                        )}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            seek(
+                                                Math.min(
+                                                    duration,
+                                                    currentTime + 5,
+                                                ),
+                                            )
+                                        }
+                                    >
+                                        <SkipForward className="w-4 h-4" />
+                                    </Button>
+                                </div>
+
+                                <div>
+                                    <p className="text-xs text-muted-foreground text-center mb-2">
+                                        Playback Speed
+                                    </p>
+                                    <div className="flex justify-center gap-1">
+                                        {[0.75, 1, 1.25, 1.5].map((rate) => (
+                                            <Button
+                                                key={rate}
+                                                variant={
+                                                    playbackRate === rate
+                                                        ? "default"
+                                                        : "outline"
+                                                }
+                                                size="sm"
+                                                className="text-xs px-2 h-7"
+                                                onClick={() => changeRate(rate)}
+                                            >
+                                                {rate}x
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </div>
                             </CardContent>
-                          </Card>
-                        );
-                      })}
+                        </Card>
                     </div>
-                  </TabsContent>
-                  
-                  <TabsContent value="text-only" className="space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div>
-                        <h3 className="text-lg font-medium text-foreground mb-4 flex items-center space-x-2">
-                          <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                          <span>Indonesian Transcription</span>
-                        </h3>
-                        <div className="min-h-[400px] p-4 bg-secondary rounded-lg max-h-[600px] overflow-y-auto">
-                          <p className="text-base leading-relaxed text-foreground">
-                            {transcriptionSegments.map(segment => segment.text).join(' ')}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-lg font-medium text-foreground mb-4 flex items-center space-x-2">
-                          <span className="w-3 h-3 bg-academic-teal rounded-full"></span>
-                          <span>English Translation</span>
-                        </h3>
-                        <div className="min-h-[400px] p-4 bg-secondary rounded-lg max-h-[600px] overflow-y-auto">
-                          <p className="text-base leading-relaxed text-foreground">
-                            {translationSegments.map(segment => segment.text).join(' ')}
-                          </p>
-                        </div>
-                      </div>
+
+                    {/* ── Translation Segments ── */}
+                    <div className="lg:col-span-3">
+                        <Card className="border-primary/10">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-base">
+                                    Segmen Terjemahan
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                                    {segments.map((segment) => (
+                                        <TranslationSegmentRow
+                                            key={segment.id}
+                                            segment={segment}
+                                            isActive={
+                                                segment.id === activeSegmentId
+                                            }
+                                            localTranslation={
+                                                localEdits[segment.id] ??
+                                                segment.translation_text ??
+                                                ""
+                                            }
+                                            isDirty={
+                                                localEdits[segment.id] !==
+                                                    undefined &&
+                                                localEdits[segment.id] !==
+                                                    (segment.translation_text ??
+                                                        "")
+                                            }
+                                            onSeek={seek}
+                                            onChange={handleChange}
+                                            onReset={handleReset}
+                                        />
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </div>
+                </div>
+            </main>
         </div>
-      </main>
-    </div>
-  );
+    );
 };
 
 export default TranslationEditor;
