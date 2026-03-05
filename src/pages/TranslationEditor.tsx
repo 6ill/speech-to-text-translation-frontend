@@ -9,8 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
     Play,
     Pause,
-    SkipBack,
-    SkipForward,
+    RotateCw,
     Volume2,
     Save,
     Loader2,
@@ -29,6 +28,7 @@ import {
 import { Segment, CorrectionSubmit } from "@/types";
 
 function formatTime(seconds: number): string {
+    if (!seconds || isNaN(seconds) || seconds < 0) return "0:00";
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
@@ -36,94 +36,78 @@ function formatTime(seconds: number): string {
 
 interface TranslationSegmentRowProps {
     segment: Segment;
-    isActive: boolean;
     localTranslation: string;
     isDirty: boolean;
     onSeek: (time: number) => void;
     onChange: (id: string, text: string) => void;
     onReset: (id: string) => void;
+    nodeRef: (node: HTMLDivElement | null) => void;
 }
 
-function TranslationSegmentRow({
+const TranslationSegmentRow = ({
     segment,
-    isActive,
     localTranslation,
     isDirty,
     onSeek,
     onChange,
     onReset,
-}: TranslationSegmentRowProps) {
-    return (
-        <div
-            className={`
-        rounded-lg border p-3 transition-colors space-y-3
-        ${
-            isActive
-                ? "border-primary/40 bg-primary/5"
-                : "border-border hover:border-border/80"
-        }
-      `}
+    nodeRef,
+}: TranslationSegmentRowProps) => (
+    <div
+        ref={nodeRef}
+        data-segment-id={segment.id}
+        className="rounded-lg border border-border p-3 transition-colors space-y-3"
+    >
+        <button
+            className="text-xs font-mono text-primary hover:underline"
+            onClick={() => onSeek(segment.start_timestamp)}
         >
-            {/* Timestamp range */}
-            <button
-                className="text-xs font-mono text-primary hover:underline"
-                onClick={() => onSeek(segment.start_timestamp)}
-            >
-                {formatTime(segment.start_timestamp)}
-                <span className="text-muted-foreground"> – </span>
-                {formatTime(segment.end_timestamp)}
-            </button>
+            {formatTime(segment.start_timestamp)}
+            <span className="text-muted-foreground"> – </span>
+            {formatTime(segment.end_timestamp)}
+        </button>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Source: Indonesian (read-only) */}
-                <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Indonesian
-                    </p>
-                    <div className="text-sm leading-relaxed text-foreground bg-muted/40 rounded-md p-2 min-h-[60px]">
-                        {segment.transcription_text}
-                    </div>
-                </div>
-
-                {/* Target: English (editable) */}
-                <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        English
-                    </p>
-                    <Textarea
-                        value={localTranslation}
-                        onChange={(e) => onChange(segment.id, e.target.value)}
-                        placeholder="Translation..."
-                        className={`
-              text-sm resize-none min-h-[60px]
-              ${isDirty ? "border-amber-400 focus-visible:ring-amber-400" : ""}
-            `}
-                        rows={Math.max(
-                            2,
-                            Math.ceil(localTranslation.length / 60),
-                        )}
-                    />
-                    {isDirty && (
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-amber-600 flex items-center gap-1">
-                                <Edit3 className="w-3 h-3" />
-                                Edited
-                            </span>
-                            <button
-                                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                onClick={() => onReset(segment.id)}
-                            >
-                                <RotateCcw className="w-3 h-3" />
-                                Reset
-                            </button>
-                        </div>
-                    )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Indonesian
+                </p>
+                <div className="text-sm leading-relaxed text-foreground bg-muted/40 rounded-md p-2 min-h-[60px]">
+                    {segment.transcription_text}
                 </div>
             </div>
+            <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    English
+                </p>
+                <Textarea
+                    value={localTranslation}
+                    onChange={(e) => onChange(segment.id, e.target.value)}
+                    placeholder="Translation..."
+                    className={`text-sm resize-none min-h-[60px] ${
+                        isDirty
+                            ? "border-amber-400 focus-visible:ring-amber-400"
+                            : ""
+                    }`}
+                    rows={Math.max(2, Math.ceil(localTranslation.length / 60))}
+                />
+                {isDirty && (
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs text-amber-600 flex items-center gap-1">
+                            <Edit3 className="w-3 h-3" /> Edited
+                        </span>
+                        <button
+                            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                            onClick={() => onReset(segment.id)}
+                        >
+                            <RotateCcw className="w-3 h-3" /> Reset
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
-    );
-}
-
+    </div>
+);
 
 const TranslationEditor = () => {
     const { id: fileId } = useParams<{ id: string }>();
@@ -132,11 +116,18 @@ const TranslationEditor = () => {
     const queryClient = useQueryClient();
 
     const audioRef = useRef<HTMLAudioElement>(null);
+    const currentTimeRef = useRef(0);
+    const progressBarRef = useRef<HTMLDivElement>(null);
+    const currentTimeLabelRef = useRef<HTMLSpanElement>(null);
+    const durationLabelRef = useRef<HTMLSpanElement>(null);
+
+    // Map of segmentId → DOM row node for direct classList highlight
+    const rowNodesRef = useRef<Map<string, HTMLDivElement>>(new Map());
+    const activeIdRef = useRef<string | null>(null);
+
     const [isPlaying, setIsPlaying] = useState(false);
-    const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
-
     const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
 
     const { data, isLoading, isError } = useQuery({
@@ -157,53 +148,114 @@ const TranslationEditor = () => {
     const hasTranslation = segments.some((s) => s.translation_text !== null);
 
     useEffect(() => {
-        if (segments.length > 0) {
-            setLocalEdits((prev) => {
-                const init: Record<string, string> = {};
-                segments.forEach((s) => {
-                    init[s.id] = prev[s.id] ?? s.translation_text ?? "";
-                });
-                return init;
-            });
-        }
-    }, [segments.length]);
+        const audio = audioRef.current;
+        if (!audio || !audioUrl) return;
+        audio.src = audioUrl;
+        audio.load();
+    }, [audioUrl]);
 
-    const activeSegmentId = segments.find(
-        (s) =>
-            currentTime >= s.start_timestamp && currentTime < s.end_timestamp,
-    )?.id;
+    useEffect(() => {
+        if (segments.length === 0) return;
+        setLocalEdits((prev) => {
+            const init: Record<string, string> = {};
+            segments.forEach((s) => {
+                init[s.id] = prev[s.id] ?? s.translation_text ?? "";
+            });
+            return init;
+        });
+    }, [segments.length]);
 
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
-        const onTime = () => setCurrentTime(audio.currentTime);
-        const onLoaded = () => setDuration(audio.duration);
+
+        const onTimeUpdate = () => {
+            const time = audio.currentTime;
+            const dur = audio.duration || 0;
+            currentTimeRef.current = time;
+
+            if (progressBarRef.current && dur > 0) {
+                progressBarRef.current.style.width = `${(time / dur) * 100}%`;
+            }
+            if (currentTimeLabelRef.current) {
+                currentTimeLabelRef.current.textContent = formatTime(time);
+            }
+
+            const active = segments.find(
+                (s) => time >= s.start_timestamp && time < s.end_timestamp,
+            );
+            const newId = active?.id ?? null;
+
+            if (newId !== activeIdRef.current) {
+                if (activeIdRef.current) {
+                    const prev = rowNodesRef.current.get(activeIdRef.current);
+                    if (prev) {
+                        prev.classList.remove(
+                            "border-primary/40",
+                            "bg-primary/5",
+                        );
+                        prev.classList.add("border-border");
+                    }
+                }
+                if (newId) {
+                    const next = rowNodesRef.current.get(newId);
+                    if (next) {
+                        next.classList.remove("border-border");
+                        next.classList.add("border-primary/40", "bg-primary/5");
+                        next.scrollIntoView({
+                            behavior: "smooth",
+                            block: "nearest",
+                        });
+                    }
+                }
+                activeIdRef.current = newId;
+            }
+        };
+
+        const onLoadedMetadata = () => {
+            setDuration(audio.duration);
+            if (durationLabelRef.current) {
+                durationLabelRef.current.textContent = formatTime(
+                    audio.duration,
+                );
+            }
+        };
+
+        const onPlay = () => setIsPlaying(true);
+        const onPause = () => setIsPlaying(false);
         const onEnded = () => setIsPlaying(false);
-        audio.addEventListener("timeupdate", onTime);
-        audio.addEventListener("loadedmetadata", onLoaded);
+
+        audio.addEventListener("timeupdate", onTimeUpdate);
+        audio.addEventListener("loadedmetadata", onLoadedMetadata);
+        audio.addEventListener("play", onPlay);
+        audio.addEventListener("pause", onPause);
         audio.addEventListener("ended", onEnded);
+
         return () => {
-            audio.removeEventListener("timeupdate", onTime);
-            audio.removeEventListener("loadedmetadata", onLoaded);
+            audio.removeEventListener("timeupdate", onTimeUpdate);
+            audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+            audio.removeEventListener("play", onPlay);
+            audio.removeEventListener("pause", onPause);
             audio.removeEventListener("ended", onEnded);
         };
-    }, []);
+    }, [segments]);
 
-    const togglePlay = () => {
+    const togglePlay = useCallback(() => {
         const audio = audioRef.current;
         if (!audio) return;
-        if (isPlaying) {
-            audio.pause();
-        } else {
-            audio.play();
-        }
-        setIsPlaying(!isPlaying);
-    };
+        audio.paused ? audio.play() : audio.pause();
+    }, []);
 
     const seek = useCallback((time: number) => {
-        if (audioRef.current) {
-            audioRef.current.currentTime = time;
-            setCurrentTime(time);
+        const audio = audioRef.current;
+        if (!audio) return;
+        audio.currentTime = time;
+        currentTimeRef.current = time;
+        if (currentTimeLabelRef.current) {
+            currentTimeLabelRef.current.textContent = formatTime(time);
+        }
+        if (progressBarRef.current && audio.duration > 0) {
+            progressBarRef.current.style.width = `${(time / audio.duration) * 100}%`;
         }
     }, []);
 
@@ -212,14 +264,13 @@ const TranslationEditor = () => {
         if (audioRef.current) audioRef.current.playbackRate = rate;
     };
 
-    const handleChange = (segmentId: string, text: string) => {
-        setLocalEdits((prev) => ({ ...prev, [segmentId]: text }));
-    };
+    const handleChange = (id: string, text: string) =>
+        setLocalEdits((prev) => ({ ...prev, [id]: text }));
 
-    const handleReset = (segmentId: string) => {
+    const handleReset = (id: string) => {
         const original =
-            segments.find((s) => s.id === segmentId)?.translation_text ?? "";
-        setLocalEdits((prev) => ({ ...prev, [segmentId]: original }));
+            segments.find((s) => s.id === id)?.translation_text ?? "";
+        setLocalEdits((prev) => ({ ...prev, [id]: original }));
     };
 
     const dirtySegments = segments.filter(
@@ -229,8 +280,8 @@ const TranslationEditor = () => {
     );
 
     const { mutate: submitCorrections, isPending: isSaving } = useMutation({
-        mutationFn: (corrections: CorrectionSubmit[]) =>
-            submitTranslationCorrectionsApi(corrections),
+        mutationFn: (c: CorrectionSubmit[]) =>
+            submitTranslationCorrectionsApi(c),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["segments", fileId] });
             toast({
@@ -238,24 +289,23 @@ const TranslationEditor = () => {
                 description: `${dirtySegments.length} segment(s) updated.`,
             });
         },
-        onError: () => {
+        onError: () =>
             toast({
                 title: "Failed to save",
                 description: "Please try again.",
                 variant: "destructive",
-            });
-        },
+            }),
     });
 
     const handleSave = () => {
-        if (dirtySegments.length === 0) return;
-        const corrections: CorrectionSubmit[] = dirtySegments.map((s) => ({
-            segment_id: s.id,
-            corrected_text: localEdits[s.id],
-        }));
-        submitCorrections(corrections);
+        if (!dirtySegments.length) return;
+        submitCorrections(
+            dirtySegments.map((s) => ({
+                segment_id: s.id,
+                corrected_text: localEdits[s.id],
+            })),
+        );
     };
-
 
     if (isLoading) {
         return (
@@ -277,8 +327,8 @@ const TranslationEditor = () => {
                     <AlertCircle className="w-8 h-8" />
                     <p>
                         {isError
-                            ? "An error occurred while loading data."
-                            : "Translation is not yet available for this file."}
+                            ? "An error occurred."
+                            : "Translation not yet available for this file."}
                     </p>
                     <Button variant="outline" onClick={() => navigate("/")}>
                         Back to Dashboard
@@ -291,21 +341,17 @@ const TranslationEditor = () => {
     return (
         <div className="min-h-screen bg-background">
             <Header />
-
-            <audio ref={audioRef} src={audioUrl} preload="metadata" />
+            <audio ref={audioRef} preload="metadata" />
 
             <main className="container mx-auto px-4 py-6">
-                {/* Page header */}
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
-                        {/* Back to Dashboard */}
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => navigate("/")}
                         >
-                            <ArrowLeft className="w-4 h-4 mr-1" />
-                            Dashboard
+                            <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
                         </Button>
                         <div>
                             <h1 className="text-2xl font-bold text-foreground">
@@ -317,7 +363,6 @@ const TranslationEditor = () => {
                             </p>
                         </div>
                     </div>
-
                     <div className="flex items-center gap-2">
                         {dirtySegments.length > 0 && (
                             <Badge
@@ -327,19 +372,17 @@ const TranslationEditor = () => {
                                 {dirtySegments.length} unsaved
                             </Badge>
                         )}
-                        {/* Go to Transcription */}
                         <Button
                             variant="outline"
                             onClick={() =>
                                 navigate(`/file/${fileId}/transcribe`)
                             }
                         >
-                            <Mic className="w-4 h-4 mr-2" />
-                            Go to Transcription
+                            <Mic className="w-4 h-4 mr-2" /> Go to Transcription
                         </Button>
                         <Button
                             onClick={handleSave}
-                            disabled={dirtySegments.length === 0 || isSaving}
+                            disabled={!dirtySegments.length || isSaving}
                         >
                             {isSaving ? (
                                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -357,34 +400,36 @@ const TranslationEditor = () => {
                         <Card className="sticky top-4 border-primary/10">
                             <CardHeader className="pb-3">
                                 <CardTitle className="flex items-center gap-2 text-base">
-                                    <Volume2 className="w-4 h-4 text-primary" />
+                                    <Volume2 className="w-4 h-4 text-primary" />{" "}
                                     Audio Player
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                {/* Progress bar */}
                                 <div
-                                    className="w-full h-2 bg-secondary rounded-full cursor-pointer"
+                                    className="w-full h-3 bg-secondary rounded-full cursor-pointer relative overflow-hidden"
                                     onClick={(e) => {
                                         const rect =
                                             e.currentTarget.getBoundingClientRect();
-                                        const ratio =
-                                            (e.clientX - rect.left) /
-                                            rect.width;
-                                        seek(ratio * duration);
+                                        seek(
+                                            ((e.clientX - rect.left) /
+                                                rect.width) *
+                                                duration,
+                                        );
                                     }}
                                 >
                                     <div
-                                        className="bg-primary h-2 rounded-full transition-none"
+                                        ref={progressBarRef}
+                                        className="bg-primary h-full rounded-full absolute top-0 left-0"
                                         style={{
-                                            width: `${duration ? (currentTime / duration) * 100 : 0}%`,
+                                            width: "0%",
+                                            transition: "none",
                                         }}
                                     />
                                 </div>
 
                                 <div className="flex justify-between text-xs text-muted-foreground font-mono">
-                                    <span>{formatTime(currentTime)}</span>
-                                    <span>{formatTime(duration)}</span>
+                                    <span ref={currentTimeLabelRef}>0:00</span>
+                                    <span ref={durationLabelRef}>0:00</span>
                                 </div>
 
                                 <div className="flex items-center justify-center gap-2">
@@ -392,15 +437,20 @@ const TranslationEditor = () => {
                                         variant="outline"
                                         size="sm"
                                         onClick={() =>
-                                            seek(Math.max(0, currentTime - 5))
+                                            seek(
+                                                Math.max(
+                                                    0,
+                                                    currentTimeRef.current - 5,
+                                                ),
+                                            )
                                         }
                                     >
-                                        <SkipBack className="w-4 h-4" />
+                                        <RotateCcw className="w-4 h-4" />
                                     </Button>
                                     <Button
-                                        onClick={togglePlay}
                                         size="sm"
                                         className="w-10 h-10 rounded-full p-0"
+                                        onClick={togglePlay}
                                     >
                                         {isPlaying ? (
                                             <Pause className="w-4 h-4" />
@@ -415,12 +465,12 @@ const TranslationEditor = () => {
                                             seek(
                                                 Math.min(
                                                     duration,
-                                                    currentTime + 5,
+                                                    currentTimeRef.current + 5,
                                                 ),
                                             )
                                         }
                                     >
-                                        <SkipForward className="w-4 h-4" />
+                                        <RotateCw className="w-4 h-4" />
                                     </Button>
                                 </div>
 
@@ -464,9 +514,6 @@ const TranslationEditor = () => {
                                         <TranslationSegmentRow
                                             key={segment.id}
                                             segment={segment}
-                                            isActive={
-                                                segment.id === activeSegmentId
-                                            }
                                             localTranslation={
                                                 localEdits[segment.id] ??
                                                 segment.translation_text ??
@@ -482,6 +529,17 @@ const TranslationEditor = () => {
                                             onSeek={seek}
                                             onChange={handleChange}
                                             onReset={handleReset}
+                                            nodeRef={(node) => {
+                                                if (node)
+                                                    rowNodesRef.current.set(
+                                                        segment.id,
+                                                        node,
+                                                    );
+                                                else
+                                                    rowNodesRef.current.delete(
+                                                        segment.id,
+                                                    );
+                                            }}
                                         />
                                     ))}
                                 </div>

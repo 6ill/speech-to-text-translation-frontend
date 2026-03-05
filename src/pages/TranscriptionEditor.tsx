@@ -9,8 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
     Play,
     Pause,
-    SkipBack,
-    SkipForward,
+    RotateCw,
     Volume2,
     Save,
     Languages,
@@ -31,84 +30,83 @@ import {
 } from "@/api/files";
 import { Segment, CorrectionSubmit } from "@/types";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function formatTime(seconds: number): string {
+    if (!seconds || isNaN(seconds) || seconds < 0) return "0:00";
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+// ─── Segment Row ──────────────────────────────────────────────────────────────
+// Simple presentational component — highlight is applied via direct DOM
+// classList manipulation from the parent's timeupdate handler, NOT via props.
+
 interface SegmentRowProps {
     segment: Segment;
-    isActive: boolean;
     localText: string;
     isDirty: boolean;
     onSeek: (time: number) => void;
     onChange: (id: string, text: string) => void;
     onReset: (id: string) => void;
+    // ref callback so parent can store the DOM node
+    nodeRef: (node: HTMLDivElement | null) => void;
 }
 
-function SegmentRow({
+const SegmentRow = ({
     segment,
-    isActive,
     localText,
     isDirty,
     onSeek,
     onChange,
     onReset,
-}: SegmentRowProps) {
-    return (
-        <div
-            className={`
-        group flex gap-3 p-3 rounded-lg border transition-colors
-        ${
-            isActive
-                ? "border-primary/40 bg-primary/5"
-                : "border-transparent hover:border-border hover:bg-muted/30"
-        }
-      `}
+    nodeRef,
+}: SegmentRowProps) => (
+    <div
+        ref={nodeRef}
+        data-segment-id={segment.id}
+        className="flex gap-3 p-3 rounded-lg border border-transparent
+               transition-colors hover:border-border hover:bg-muted/30"
+    >
+        <button
+            className="shrink-0 text-xs font-mono text-primary hover:underline mt-1 text-left w-24"
+            onClick={() => onSeek(segment.start_timestamp)}
         >
-            {/* Timestamp range — click to seek */}
-            <button
-                className="shrink-0 text-xs font-mono text-primary hover:underline mt-1 text-left w-24"
-                onClick={() => onSeek(segment.start_timestamp)}
-                title="Seek to this segment"
-            >
-                {formatTime(segment.start_timestamp)}
-                <span className="text-muted-foreground"> – </span>
-                {formatTime(segment.end_timestamp)}
-            </button>
+            {formatTime(segment.start_timestamp)}
+            <span className="text-muted-foreground"> – </span>
+            {formatTime(segment.end_timestamp)}
+        </button>
 
-            {/* Editable text */}
-            <div className="flex-1 space-y-1">
-                <Textarea
-                    value={localText}
-                    onChange={(e) => onChange(segment.id, e.target.value)}
-                    className={`
-            min-h-0 resize-none text-sm leading-relaxed py-1 px-2
-            ${isDirty ? "border-amber-400 focus-visible:ring-amber-400" : ""}
-          `}
-                    rows={Math.max(2, Math.ceil(localText.length / 80))}
-                />
-                {isDirty && (
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs text-amber-600 flex items-center gap-1">
-                            <Edit3 className="w-3 h-3" />
-                            Edited
-                        </span>
-                        <button
-                            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                            onClick={() => onReset(segment.id)}
-                        >
-                            <RotateCcw className="w-3 h-3" />
-                            Reset
-                        </button>
-                    </div>
-                )}
-            </div>
+        <div className="flex-1 space-y-1">
+            <Textarea
+                value={localText}
+                onChange={(e) => onChange(segment.id, e.target.value)}
+                className={`min-h-0 resize-none text-sm leading-relaxed py-1 px-2 ${
+                    isDirty
+                        ? "border-amber-400 focus-visible:ring-amber-400"
+                        : ""
+                }`}
+                rows={Math.max(2, Math.ceil(localText.length / 80))}
+            />
+            {isDirty && (
+                <div className="flex items-center justify-between">
+                    <span className="text-xs text-amber-600 flex items-center gap-1">
+                        <Edit3 className="w-3 h-3" /> Edited
+                    </span>
+                    <button
+                        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        onClick={() => onReset(segment.id)}
+                    >
+                        <RotateCcw className="w-3 h-3" /> Reset
+                    </button>
+                </div>
+            )}
         </div>
-    );
-}
+    </div>
+);
 
+// ─── Transcription Editor ─────────────────────────────────────────────────────
 
 const TranscriptionEditor = () => {
     const { id: fileId } = useParams<{ id: string }>();
@@ -116,21 +114,36 @@ const TranscriptionEditor = () => {
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
+    // ── Audio ──
     const audioRef = useRef<HTMLAudioElement>(null);
+
+    // KEY FIX: currentTime lives in a ref, NOT state.
+    // This means timeupdate does NOT trigger React re-renders.
+    const currentTimeRef = useRef(0);
+
+    // Refs to DOM nodes we update directly in timeupdate (no re-render needed)
+    const progressBarRef = useRef<HTMLDivElement>(null);
+    const currentTimeLabelRef = useRef<HTMLSpanElement>(null);
+    const durationLabelRef = useRef<HTMLSpanElement>(null);
+
+    // Map of segmentId → DOM div for direct classList manipulation
+    const rowNodesRef = useRef<Map<string, HTMLDivElement>>(new Map());
+    // Track which segment is currently highlighted
+    const activeIdRef = useRef<string | null>(null);
+
+    // Only these need to be React state (they drive structural UI changes)
     const [isPlaying, setIsPlaying] = useState(false);
-    const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
-
     const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
 
+    // ── Queries ──
     const { data: fileData } = useQuery({
         queryKey: ["file", fileId],
         queryFn: () => getFileByIdApi(fileId!),
         enabled: !!fileId,
     });
-    const fileStatus = fileData?.data?.status;
-    const isAlreadyTranslated = fileStatus === "translated";
+    const isAlreadyTranslated = fileData?.data?.status === "translated";
 
     const { data, isLoading, isError } = useQuery({
         queryKey: ["segments", fileId],
@@ -148,55 +161,126 @@ const TranscriptionEditor = () => {
     const segments: Segment[] = data?.data?.segments ?? [];
     const audioUrl = urlData?.data?.download_url ?? "";
 
+    // ── Set audio src imperatively when presigned URL arrives ──
     useEffect(() => {
-        if (segments.length > 0) {
-            setLocalEdits((prev) => {
-                const init: Record<string, string> = {};
-                segments.forEach((s) => {
-                    init[s.id] = prev[s.id] ?? s.transcription_text;
-                });
-                return init;
+        const audio = audioRef.current;
+        if (!audio || !audioUrl) return;
+        audio.src = audioUrl;
+        audio.load();
+    }, [audioUrl]);
+
+    // ── Init local edits ──
+    useEffect(() => {
+        if (segments.length === 0) return;
+        setLocalEdits((prev) => {
+            const init: Record<string, string> = {};
+            segments.forEach((s) => {
+                init[s.id] = prev[s.id] ?? s.transcription_text;
             });
-        }
+            return init;
+        });
     }, [segments.length]);
 
-    const activeSegmentId = segments.find(
-        (s) =>
-            currentTime >= s.start_timestamp && currentTime < s.end_timestamp,
-    )?.id;
-
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
-        const onTime = () => setCurrentTime(audio.currentTime);
-        const onLoaded = () => setDuration(audio.duration);
+
+        const onTimeUpdate = () => {
+            const time = audio.currentTime;
+            const dur = audio.duration || 0;
+            currentTimeRef.current = time;
+
+            if (progressBarRef.current && dur > 0) {
+                progressBarRef.current.style.width = `${(time / dur) * 100}%`;
+            }
+
+            if (currentTimeLabelRef.current) {
+                currentTimeLabelRef.current.textContent = formatTime(time);
+            }
+
+            // Highlight active segment via classList — no setState
+            const activeSegment = segments.find(
+                (s) => time >= s.start_timestamp && time < s.end_timestamp,
+            );
+            const newId = activeSegment?.id ?? null;
+
+            if (newId !== activeIdRef.current) {
+                // Remove old highlight
+                if (activeIdRef.current) {
+                    const prevEl = rowNodesRef.current.get(activeIdRef.current);
+                    if (prevEl) {
+                        prevEl.classList.remove(
+                            "border-primary/40",
+                            "bg-primary/5",
+                        );
+                        prevEl.classList.add("border-transparent");
+                    }
+                }
+                // Add new highlight + scroll into view
+                if (newId) {
+                    const nextEl = rowNodesRef.current.get(newId);
+                    if (nextEl) {
+                        nextEl.classList.remove("border-transparent");
+                        nextEl.classList.add(
+                            "border-primary/40",
+                            "bg-primary/5",
+                        );
+                        nextEl.scrollIntoView({
+                            behavior: "smooth",
+                            block: "nearest",
+                        });
+                    }
+                }
+                activeIdRef.current = newId;
+            }
+        };
+
+        const onLoadedMetadata = () => {
+            setDuration(audio.duration);
+            if (durationLabelRef.current) {
+                durationLabelRef.current.textContent = formatTime(
+                    audio.duration,
+                );
+            }
+        };
+
+        const onPlay = () => setIsPlaying(true);
+        const onPause = () => setIsPlaying(false);
         const onEnded = () => setIsPlaying(false);
-        audio.addEventListener("timeupdate", onTime);
-        audio.addEventListener("loadedmetadata", onLoaded);
+
+        audio.addEventListener("timeupdate", onTimeUpdate);
+        audio.addEventListener("loadedmetadata", onLoadedMetadata);
+        audio.addEventListener("play", onPlay);
+        audio.addEventListener("pause", onPause);
         audio.addEventListener("ended", onEnded);
+
         return () => {
-            audio.removeEventListener("timeupdate", onTime);
-            audio.removeEventListener("loadedmetadata", onLoaded);
+            audio.removeEventListener("timeupdate", onTimeUpdate);
+            audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+            audio.removeEventListener("play", onPlay);
+            audio.removeEventListener("pause", onPause);
             audio.removeEventListener("ended", onEnded);
         };
-    }, []);
+    }, [segments]); // re-subscribe when segments list changes
 
-    const togglePlay = () => {
+    const togglePlay = useCallback(() => {
         const audio = audioRef.current;
         if (!audio) return;
-        if (isPlaying) {
-            audio.pause();
-        } else {
-            audio.play();
-        }
-        setIsPlaying(!isPlaying);
-    };
+        audio.paused ? audio.play() : audio.pause();
+    }, []);
 
     const seek = useCallback((time: number) => {
         const audio = audioRef.current;
         if (!audio) return;
         audio.currentTime = time;
-        setCurrentTime(time);
+        currentTimeRef.current = time;
+        // Immediately update UI without waiting for next timeupdate
+        if (currentTimeLabelRef.current) {
+            currentTimeLabelRef.current.textContent = formatTime(time);
+        }
+        if (progressBarRef.current && audio.duration > 0) {
+            progressBarRef.current.style.width = `${(time / audio.duration) * 100}%`;
+        }
     }, []);
 
     const changeRate = (rate: number) => {
@@ -204,14 +288,14 @@ const TranscriptionEditor = () => {
         if (audioRef.current) audioRef.current.playbackRate = rate;
     };
 
-    const handleChange = (segmentId: string, text: string) => {
-        setLocalEdits((prev) => ({ ...prev, [segmentId]: text }));
-    };
+    const handleChange = (id: string, text: string) => {
+        setLocalEdits((prev) => ({ ...prev, [id]: text }));
+    }
 
-    const handleReset = (segmentId: string) => {
+    const handleReset = (id: string) => {
         const original =
-            segments.find((s) => s.id === segmentId)?.transcription_text ?? "";
-        setLocalEdits((prev) => ({ ...prev, [segmentId]: original }));
+            segments.find((s) => s.id === id)?.transcription_text ?? "";
+        setLocalEdits((prev) => ({ ...prev, [id]: original }));
     };
 
     const dirtySegments = segments.filter(
@@ -221,8 +305,8 @@ const TranscriptionEditor = () => {
     );
 
     const { mutate: submitCorrections, isPending: isSaving } = useMutation({
-        mutationFn: (corrections: CorrectionSubmit[]) =>
-            submitTranscriptionCorrectionsApi(corrections),
+        mutationFn: (c: CorrectionSubmit[]) =>
+            submitTranscriptionCorrectionsApi(c),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["segments", fileId] });
             toast({
@@ -230,22 +314,22 @@ const TranscriptionEditor = () => {
                 description: `${dirtySegments.length} segment(s) updated.`,
             });
         },
-        onError: () => {
+        onError: () =>
             toast({
                 title: "Failed to save",
                 description: "Please try again.",
                 variant: "destructive",
-            });
-        },
+            }),
     });
 
     const handleSave = () => {
-        if (dirtySegments.length === 0) return;
-        const corrections: CorrectionSubmit[] = dirtySegments.map((s) => ({
-            segment_id: s.id,
-            corrected_text: localEdits[s.id],
-        }));
-        submitCorrections(corrections);
+        if (!dirtySegments.length) return;
+        submitCorrections(
+            dirtySegments.map((s) => ({
+                segment_id: s.id,
+                corrected_text: localEdits[s.id],
+            })),
+        );
     };
 
     const { mutate: triggerTranslation, isPending: isTriggering } = useMutation(
@@ -254,20 +338,17 @@ const TranscriptionEditor = () => {
             onSuccess: () => {
                 toast({
                     title: "Translation started!",
-                    description:
-                        "The process is running in the background. Check the dashboard for status.",
+                    description: "Check the dashboard for status.",
                 });
                 navigate("/");
             },
-            onError: () => {
+            onError: () =>
                 toast({
                     title: "Failed to start translation",
                     variant: "destructive",
-                });
-            },
+                }),
         },
     );
-
 
     if (isLoading) {
         return (
@@ -299,21 +380,19 @@ const TranscriptionEditor = () => {
     return (
         <div className="min-h-screen bg-background">
             <Header />
-
-            <audio ref={audioRef} src={audioUrl} preload="metadata" />
+            {/* No src prop — set imperatively via useEffect when URL is ready */}
+            <audio ref={audioRef} preload="metadata" />
 
             <main className="container mx-auto px-4 py-6">
                 {/* Page header */}
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
-                        {/* Back to Dashboard */}
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => navigate("/")}
                         >
-                            <ArrowLeft className="w-4 h-4 mr-1" />
-                            Dashboard
+                            <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
                         </Button>
                         <div>
                             <h1 className="text-2xl font-bold text-foreground">
@@ -324,7 +403,6 @@ const TranscriptionEditor = () => {
                             </p>
                         </div>
                     </div>
-
                     <div className="flex items-center gap-2">
                         {dirtySegments.length > 0 && (
                             <Badge
@@ -337,7 +415,7 @@ const TranscriptionEditor = () => {
                         <Button
                             variant="outline"
                             onClick={handleSave}
-                            disabled={dirtySegments.length === 0 || isSaving}
+                            disabled={!dirtySegments.length || isSaving}
                         >
                             {isSaving ? (
                                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -346,8 +424,6 @@ const TranscriptionEditor = () => {
                             )}
                             Save Changes
                         </Button>
-
-                        {/* Smart translate button: "Go to Translation" if already translated, else "Proceed to Translation" */}
                         {isAlreadyTranslated ? (
                             <Button
                                 variant="outline"
@@ -387,50 +463,60 @@ const TranscriptionEditor = () => {
                         <Card className="sticky top-4 border-primary/10">
                             <CardHeader className="pb-3">
                                 <CardTitle className="flex items-center gap-2 text-base">
-                                    <Volume2 className="w-4 h-4 text-primary" />
+                                    <Volume2 className="w-4 h-4 text-primary" />{" "}
                                     Audio Player
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 {/* Progress bar */}
                                 <div
-                                    className="w-full h-2 bg-secondary rounded-full cursor-pointer"
+                                    className="w-full h-3 bg-secondary rounded-full cursor-pointer relative overflow-hidden"
                                     onClick={(e) => {
                                         const rect =
                                             e.currentTarget.getBoundingClientRect();
-                                        const ratio =
-                                            (e.clientX - rect.left) /
-                                            rect.width;
-                                        seek(ratio * duration);
+                                        seek(
+                                            ((e.clientX - rect.left) /
+                                                rect.width) *
+                                                duration,
+                                        );
                                     }}
                                 >
                                     <div
-                                        className="bg-primary h-2 rounded-full transition-none"
+                                        className="bg-primary h-full rounded-full absolute top-0 left-0"
+                                        ref={progressBarRef}
                                         style={{
-                                            width: `${duration ? (currentTime / duration) * 100 : 0}%`,
+                                            width: "0%",
+                                            transition: "none",
                                         }}
                                     />
                                 </div>
 
                                 <div className="flex justify-between text-xs text-muted-foreground font-mono">
-                                    <span>{formatTime(currentTime)}</span>
-                                    <span>{formatTime(duration)}</span>
+                                    {/* Updated directly via ref — no React re-render */}
+                                    <span ref={currentTimeLabelRef}>0:00</span>
+                                    <span ref={durationLabelRef}>0:00</span>
                                 </div>
 
+                                {/* Controls */}
                                 <div className="flex items-center justify-center gap-2">
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={() =>
-                                            seek(Math.max(0, currentTime - 5))
+                                            seek(
+                                                Math.max(
+                                                    0,
+                                                    currentTimeRef.current - 5,
+                                                ),
+                                            )
                                         }
                                     >
-                                        <SkipBack className="w-4 h-4" />
+                                        <RotateCcw className="w-4 h-4" />
                                     </Button>
                                     <Button
-                                        onClick={togglePlay}
                                         size="sm"
                                         className="w-10 h-10 rounded-full p-0"
+                                        onClick={togglePlay}
                                     >
                                         {isPlaying ? (
                                             <Pause className="w-4 h-4" />
@@ -445,12 +531,12 @@ const TranscriptionEditor = () => {
                                             seek(
                                                 Math.min(
                                                     duration,
-                                                    currentTime + 5,
+                                                    currentTimeRef.current + 5,
                                                 ),
                                             )
                                         }
                                     >
-                                        <SkipForward className="w-4 h-4" />
+                                        <RotateCw className="w-4 h-4" />
                                     </Button>
                                 </div>
 
@@ -478,7 +564,10 @@ const TranscriptionEditor = () => {
                                 </div>
 
                                 {dirtySegments.length > 0 && (
-                                    <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg p-2">
+                                    <div
+                                        className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-950/30
+                                  text-amber-700 dark:text-amber-400 rounded-lg p-2"
+                                    >
                                         <Save className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                                         <span>
                                             Save changes before proceeding to
@@ -490,7 +579,7 @@ const TranscriptionEditor = () => {
                         </Card>
                     </div>
 
-                    {/* ── Segment Editor ── */}
+                    {/* ── Segment list ── */}
                     <div className="lg:col-span-2">
                         <Card className="border-primary/10">
                             <CardHeader className="pb-3">
@@ -504,9 +593,6 @@ const TranscriptionEditor = () => {
                                         <SegmentRow
                                             key={segment.id}
                                             segment={segment}
-                                            isActive={
-                                                segment.id === activeSegmentId
-                                            }
                                             localText={
                                                 localEdits[segment.id] ??
                                                 segment.transcription_text
@@ -520,6 +606,18 @@ const TranscriptionEditor = () => {
                                             onSeek={seek}
                                             onChange={handleChange}
                                             onReset={handleReset}
+                                            // Ref callback: store each row's DOM node in the map
+                                            nodeRef={(node) => {
+                                                if (node)
+                                                    rowNodesRef.current.set(
+                                                        segment.id,
+                                                        node,
+                                                    );
+                                                else
+                                                    rowNodesRef.current.delete(
+                                                        segment.id,
+                                                    );
+                                            }}
                                         />
                                     ))}
                                 </div>
