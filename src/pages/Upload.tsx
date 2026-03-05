@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -41,6 +42,13 @@ function formatBytes(bytes: number) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function renameFile(file: File, newName: string): File {
+    return new File([file], newName, {
+        type: file.type,
+        lastModified: file.lastModified,
+    });
+}
+
 
 const UploadPage = () => {
     const navigate = useNavigate();
@@ -48,6 +56,7 @@ const UploadPage = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [projectTitle, setProjectTitle] = useState("");
     const [speakerId, setSpeakerId] = useState<string>("");
     const [isDragging, setIsDragging] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -82,6 +91,10 @@ const UploadPage = () => {
             return;
         }
         setSelectedFile(file);
+        if (!projectTitle) {
+            const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+            setProjectTitle(nameWithoutExt);
+        }
         setUploadDone(false);
         setUploadProgress(0);
     };
@@ -96,19 +109,26 @@ const UploadPage = () => {
     const handleUpload = async () => {
         if (!selectedFile) return;
 
+        const ext = selectedFile.name.match(/\.[^/.]+$/)?.[0] ?? "";
+        const titleTrimmed = projectTitle.trim();
+        const finalName = titleTrimmed
+            ? `${titleTrimmed}${ext}`
+            : selectedFile.name;
+        const fileToUpload = renameFile(selectedFile, finalName);
+
         setIsUploading(true);
         setUploadProgress(0);
 
         try {
-            const res = await uploadFileApi(
-                selectedFile,
-                speakerId || null,
+            await uploadFileApi(
+                fileToUpload,
+                speakerId && speakerId !== "none" ? speakerId : null,
                 setUploadProgress,
             );
 
             setUploadDone(true);
             toast({
-                title: "Upload berhasil!",
+                title: "Upload successful!",
                 description:
                     "Transcription is being processed. You will be redirected to the dashboard.",
             });
@@ -117,15 +137,13 @@ const UploadPage = () => {
             setTimeout(() => {
                 navigate("/");
             }, 1500);
-
-            void res;
         } catch (error: unknown) {
             const msg =
                 (error as { response?: { data?: { detail?: string } } })
                     ?.response?.data?.detail ??
                 "Failed to upload file. Please try again.";
             toast({
-                title: "Upload gagal",
+                title: "Upload failed",
                 description: msg,
                 variant: "destructive",
             });
@@ -135,6 +153,8 @@ const UploadPage = () => {
         }
     };
 
+    const canSubmit =
+        !!selectedFile && !!projectTitle.trim() && !isUploading && !uploadDone;
 
     return (
         <div className="min-h-screen bg-background">
@@ -147,7 +167,8 @@ const UploadPage = () => {
                             Upload File
                         </h1>
                         <p className="text-muted-foreground">
-                           Upload your recording to start transcription automatically
+                            Upload an audio or video file to start automatic
+                            transcription.
                         </p>
                     </div>
 
@@ -155,78 +176,105 @@ const UploadPage = () => {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Upload className="w-5 h-5 text-primary" />
-                                File Audio / Video
+                                Audio / Video File
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <div
-                                className={`
-                                    border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors
-                                    ${
-                                        isDragging
-                                            ? "border-primary bg-primary/5"
-                                            : "border-border hover:border-primary/50 hover:bg-muted/30"
+                            <div className="space-y-2">
+                                <Label htmlFor="project-title">
+                                    Project Title{" "}
+                                    <span className="text-destructive">*</span>
+                                </Label>
+                                <Input
+                                    id="project-title"
+                                    placeholder="e.g. Algorithms Lecture — Week 5"
+                                    value={projectTitle}
+                                    onChange={(e) =>
+                                        setProjectTitle(e.target.value)
                                     }
-                                    ${selectedFile ? "border-green-500/50 bg-green-500/5" : ""}
-                                `}
-                                onClick={() => fileInputRef.current?.click()}
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    setIsDragging(true);
-                                }}
-                                onDragLeave={() => setIsDragging(false)}
-                                onDrop={handleDrop}
-                            >
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept={ACCEPTED_EXTENSIONS}
-                                    className="hidden"
-                                    onChange={(e) => {
-                                        const f = e.target.files?.[0];
-                                        if (f) handleFileSelect(f);
-                                    }}
+                                    disabled={isUploading}
+                                    maxLength={200}
                                 />
+                                <p className="text-xs text-muted-foreground">
+                                    This will be used as the file name shown on
+                                    the dashboard.
+                                </p>
+                            </div>
 
-                                {selectedFile ? (
-                                    <div className="space-y-2">
-                                        <FileAudio className="w-10 h-10 mx-auto text-green-600" />
-                                        <p className="font-medium text-foreground">
-                                            {selectedFile.name}
-                                        </p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {formatBytes(selectedFile.size)}
-                                        </p>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-destructive hover:text-destructive mt-1"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedFile(null);
-                                                setUploadProgress(0);
-                                                setUploadDone(false);
-                                            }}
-                                        >
-                                            <X className="w-4 h-4 mr-1" />
-                                            Remove
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <Upload className="w-10 h-10 mx-auto text-muted-foreground" />
-                                        <p className="font-medium text-foreground">
-                                            Drag & drop file here
-                                        </p>
-                                        <p className="text-sm text-muted-foreground">
-                                            or click here to browse files
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            MP3, WAV, M4A, OGG, MP4 — max{" "}
-                                            {MAX_SIZE_MB} MB
-                                        </p>
-                                    </div>
-                                )}
+                            {/* ── Drop Zone ── */}
+                            <div className="space-y-2">
+                                <Label>File</Label>
+                                <div
+                                    className={`
+                    border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors
+                    ${
+                        isDragging
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50 hover:bg-muted/30"
+                    }
+                    ${selectedFile ? "border-green-500/50 bg-green-500/5" : ""}
+                  `}
+                                    onClick={() =>
+                                        fileInputRef.current?.click()
+                                    }
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        setIsDragging(true);
+                                    }}
+                                    onDragLeave={() => setIsDragging(false)}
+                                    onDrop={handleDrop}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept={ACCEPTED_EXTENSIONS}
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            const f = e.target.files?.[0];
+                                            if (f) handleFileSelect(f);
+                                        }}
+                                    />
+
+                                    {selectedFile ? (
+                                        <div className="space-y-2">
+                                            <FileAudio className="w-10 h-10 mx-auto text-green-600" />
+                                            <p className="font-medium text-foreground">
+                                                {selectedFile.name}
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {formatBytes(selectedFile.size)}
+                                            </p>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="text-destructive hover:text-destructive mt-1"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedFile(null);
+                                                    setUploadProgress(0);
+                                                    setUploadDone(false);
+                                                }}
+                                            >
+                                                <X className="w-4 h-4 mr-1" />{" "}
+                                                Remove
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <Upload className="w-10 h-10 mx-auto text-muted-foreground" />
+                                            <p className="font-medium text-foreground">
+                                                Drag & drop file here
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                                or click to browse
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                MP3, WAV, M4A, OGG, MP4 — max{" "}
+                                                {MAX_SIZE_MB} MB
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* ── Speaker Dropdown ── */}
@@ -239,7 +287,7 @@ const UploadPage = () => {
                                     onValueChange={setSpeakerId}
                                 >
                                     <SelectTrigger id="speaker">
-                                        <SelectValue placeholder="Choose speaker..." />
+                                        <SelectValue placeholder="Select a speaker..." />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="none">
@@ -268,36 +316,34 @@ const UploadPage = () => {
                                 </div>
                             )}
 
-                            {/* ── Success state ── */}
+                            {/* ── Success ── */}
                             {uploadDone && (
                                 <div className="flex items-center gap-2 text-green-600 text-sm">
                                     <CheckCircle2 className="w-4 h-4" />
                                     <span>
-                                        Successfully uploaded! Redirect to
+                                        Upload complete! Redirecting to
                                         dashboard...
                                     </span>
                                 </div>
                             )}
 
-                            {/* ── Error hint ── */}
-                            {!isUploading &&
-                                !uploadDone &&
-                                selectedFile === null && (
-                                    <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg p-3">
-                                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                                        <span>
-                                            After uploading, automatic transcription will begin. This process may take a few minutes depending on the audio length.
-                                        </span>
-                                    </div>
-                                )}
+                            {/* ── Info hint ── */}
+                            {!isUploading && !uploadDone && (
+                                <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg p-3">
+                                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                    <span>
+                                        After upload, automatic transcription
+                                        will start. This may take a few minutes
+                                        depending on the length of the audio.
+                                    </span>
+                                </div>
+                            )}
 
                             {/* ── Submit Button ── */}
                             <Button
                                 className="w-full"
                                 size="lg"
-                                disabled={
-                                    !selectedFile || isUploading || uploadDone
-                                }
+                                disabled={!canSubmit}
                                 onClick={handleUpload}
                             >
                                 {isUploading ? (
@@ -308,15 +354,22 @@ const UploadPage = () => {
                                 ) : uploadDone ? (
                                     <>
                                         <CheckCircle2 className="w-4 h-4 mr-2" />
-                                        Upload is completed
+                                        Upload Complete
                                     </>
                                 ) : (
                                     <>
                                         <Upload className="w-4 h-4 mr-2" />
-                                        Upload & start transcribing
+                                        Upload & Start Transcription
                                     </>
                                 )}
                             </Button>
+
+                            {!projectTitle.trim() && selectedFile && (
+                                <p className="text-xs text-center text-destructive">
+                                    Please enter a project title before
+                                    uploading.
+                                </p>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
