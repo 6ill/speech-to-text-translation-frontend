@@ -99,3 +99,35 @@ export async function getPeopleApi(): Promise<{ data: Person[] }> {
     const res = await apiClient.get("/people/");
     return res.data;
 }
+
+
+export type ExportType = "transcription" | "translation";
+export type SubtitleFormat = "srt" | "vtt";
+
+export async function exportSubtitlesApi(
+    fileId: string,
+    exportType: ExportType,
+    format: SubtitleFormat
+): Promise<void> {
+    const res = await apiClient.get(`/inference/${fileId}/export`, {
+        params: { export_type: exportType, format },
+        responseType: "blob",
+    });
+
+    const disposition: string = res.headers["content-disposition"] ?? "";
+    const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;\n\r]+)/i);
+    const filename = match
+        ? decodeURIComponent(match[1].replace(/["']/g, "").trim())
+        : `subtitle_${exportType}.${format}`;
+
+    const objectUrl = URL.createObjectURL(
+        new Blob([res.data], { type: "text/plain; charset=utf-8" })
+    );
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+}

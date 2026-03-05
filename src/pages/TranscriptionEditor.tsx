@@ -3,6 +3,14 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +27,8 @@ import {
     RotateCcw,
     ArrowLeft,
     ArrowRight,
+    Download,
+    ChevronDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -27,6 +37,9 @@ import {
     getFileByIdApi,
     submitTranscriptionCorrectionsApi,
     triggerTranslationApi,
+    exportSubtitlesApi,
+    ExportType,
+    SubtitleFormat,
 } from "@/api/files";
 import { Segment, CorrectionSubmit } from "@/types";
 
@@ -136,6 +149,7 @@ const TranscriptionEditor = () => {
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
     const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
+    const [isExporting, setIsExporting] = useState(false);
 
     // ── Queries ──
     const { data: fileData } = useQuery({
@@ -304,6 +318,25 @@ const TranscriptionEditor = () => {
             localEdits[s.id] !== s.transcription_text,
     );
 
+    const handleExport = async (
+        exportType: ExportType,
+        format: SubtitleFormat,
+    ) => {
+        setIsExporting(true);
+        try {
+            await exportSubtitlesApi(fileId!, exportType, format);
+        } catch {
+            toast({
+                title: "Export failed",
+                description:
+                    "Could not download subtitle file. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     const { mutate: submitCorrections, isPending: isSaving } = useMutation({
         mutationFn: (c: CorrectionSubmit[]) =>
             submitTranscriptionCorrectionsApi(c),
@@ -412,6 +445,44 @@ const TranscriptionEditor = () => {
                                 {dirtySegments.length} unsaved
                             </Badge>
                         )}
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    disabled={isExporting}
+                                >
+                                    {isExporting ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <Download className="w-4 h-4 mr-2" />
+                                    )}
+                                    Export Subtitles
+                                    <ChevronDown className="w-3 h-3 ml-2" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuLabel>
+                                    Transcription
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    onClick={() =>
+                                        handleExport("transcription", "srt")
+                                    }
+                                >
+                                    Download as .srt
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() =>
+                                        handleExport("transcription", "vtt")
+                                    }
+                                >
+                                    Download as .vtt
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
                         <Button
                             variant="outline"
                             onClick={handleSave}
@@ -606,7 +677,6 @@ const TranscriptionEditor = () => {
                                             onSeek={seek}
                                             onChange={handleChange}
                                             onReset={handleReset}
-                                            // Ref callback: store each row's DOM node in the map
                                             nodeRef={(node) => {
                                                 if (node)
                                                     rowNodesRef.current.set(
