@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +12,29 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     Upload,
     Clock,
     FileAudio,
@@ -18,10 +42,19 @@ import {
     AlertCircle,
     Languages,
     Mic,
+    MoreVertical,
+    Pencil,
+    Trash2,
 } from "lucide-react";
-import { getFilesApi } from "@/api/files";
+import {
+    getFilesApi,
+    deleteFileApi,
+    updateFileApi,
+    getPeopleApi,
+} from "@/api/files";
 import { FileRecord, FileStatus, POLLING_STATUSES } from "@/types";
 import { formatDistanceToNow } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_CONFIG: Record<FileStatus, { label: string; className: string }> =
     {
@@ -47,10 +80,57 @@ function formatDuration(seconds: number): string {
 }
 
 
-function FileCard({ file }: { file: FileRecord }) {
+function FileCard({
+    file,
+    onDeleted,
+    onUpdated,
+}: {
+    file: FileRecord;
+    onDeleted: (id: string) => void;
+    onUpdated: () => void;
+}) {
     const navigate = useNavigate();
+    const { toast } = useToast();
     const isProcessing = POLLING_STATUSES.includes(file.status);
     const config = STATUS_CONFIG[file.status];
+
+    const [editOpen, setEditOpen] = useState(false);
+    const [editName, setEditName] = useState(file.file_name);
+    const [editSpeakerId, setEditSpeakerId] = useState<string>(
+        file.speaker?.id ?? "none",
+    );
+
+    const { data: peopleData } = useQuery({
+        queryKey: ["people"],
+        queryFn: getPeopleApi,
+        enabled: editOpen,
+    });
+    const speakers = peopleData?.data ?? [];
+
+    const { mutate: doDelete, isPending: isDeleting } = useMutation({
+        mutationFn: () => deleteFileApi(file.id),
+        onSuccess: () => {
+            toast({ title: "File deleted" });
+            onDeleted(file.id);
+        },
+        onError: () =>
+            toast({ title: "Failed to delete file", variant: "destructive" }),
+    });
+
+    const { mutate: doUpdate, isPending: isUpdating } = useMutation({
+        mutationFn: () =>
+            updateFileApi(file.id, {
+                file_name: editName.trim() || undefined,
+                speaker_id: editSpeakerId === "none" ? null : editSpeakerId,
+            }),
+        onSuccess: () => {
+            toast({ title: "File updated" });
+            setEditOpen(false);
+            onUpdated();
+        },
+        onError: () =>
+            toast({ title: "Failed to update file", variant: "destructive" }),
+    });
 
     const handleAction = () => {
         if (file.status === "transcribed") {
@@ -63,87 +143,190 @@ function FileCard({ file }: { file: FileRecord }) {
     const canNavigate = file.status === "transcribed" || file.status === "translated";
 
     return (
-        <Card className="border-primary/10 bg-gradient-card hover:shadow-elegant transition-smooth">
-            <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base text-foreground line-clamp-2 leading-snug">
-                        {file.file_name}
-                    </CardTitle>
-                    <Badge
-                        className={`shrink-0 border-0 text-xs ${config.className}`}
-                    >
-                        {isProcessing && (
-                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        )}
-                        {config.label}
-                    </Badge>
-                </div>
-            </CardHeader>
-
-            <CardContent className="space-y-2 pb-3">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        <span>{formatDuration(file.duration_seconds)}</span>
+        <>
+            <Card className="border-primary/10 bg-gradient-card hover:shadow-elegant transition-smooth">
+                <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-base text-foreground line-clamp-2 leading-snug">
+                            {file.file_name}
+                        </CardTitle>
+                        <div className="flex items-center gap-1 shrink-0">
+                            <Badge
+                                className={`border-0 text-xs ${config.className}`}
+                            >
+                                {isProcessing && (
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                )}
+                                {config.label}
+                            </Badge>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                    >
+                                        <MoreVertical className="w-3.5 h-3.5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        onClick={() => {
+                                            setEditName(file.file_name);
+                                            setEditSpeakerId(
+                                                file.speaker?.id ?? "none",
+                                            );
+                                            setEditOpen(true);
+                                        }}
+                                    >
+                                        <Pencil className="w-3.5 h-3.5 mr-2" />{" "}
+                                        Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => doDelete()}
+                                        disabled={isDeleting}
+                                    >
+                                        {isDeleting ? (
+                                            <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="w-3.5 h-3.5 mr-2" />
+                                        )}
+                                        Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
-                    <span>{formatBytes(file.file_size)}</span>
-                </div>
+                </CardHeader>
 
-                {file.speaker && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Mic className="w-3 h-3" />
-                        <span>{file.speaker.name}</span>
+                <CardContent className="space-y-2 pb-3">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span>{formatDuration(file.duration_seconds)}</span>
+                        </div>
+                        <span>{formatBytes(file.file_size)}</span>
                     </div>
-                )}
 
-                <p className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(file.created_at), {
-                        addSuffix: true,
-                    })}
-                </p>
-            </CardContent>
+                    {file.speaker && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Mic className="w-3 h-3" />
+                            <span>{file.speaker.name}</span>
+                        </div>
+                    )}
 
-            <CardFooter className="pt-0 flex gap-2">
-                {file.status === "translated" && (
+                    <p className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(file.created_at), {
+                            addSuffix: true,
+                        })}
+                    </p>
+                </CardContent>
+
+                <CardFooter className="pt-0 flex gap-2">
+                    {file.status === "translated" && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 text-xs"
+                            onClick={() =>
+                                navigate(`/file/${file.id}/transcribe`)
+                            }
+                        >
+                            <Mic className="w-3 h-3 mr-1" />
+                            Transcription
+                        </Button>
+                    )}
                     <Button
                         size="sm"
-                        variant="outline"
                         className="flex-1 text-xs"
-                        onClick={() => navigate(`/file/${file.id}/transcribe`)}
+                        disabled={!canNavigate}
+                        onClick={handleAction}
                     >
-                        <Mic className="w-3 h-3 mr-1" />
-                        Transcription
+                        {isProcessing ? (
+                            <>
+                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                Processing...
+                            </>
+                        ) : canNavigate ? (
+                            <>
+                                <Languages className="w-3 h-3 mr-1" />
+                                {file.status === "translated"
+                                    ? "Translation"
+                                    : "Open Editor"}
+                            </>
+                        ) : (
+                            "Waiting..."
+                        )}
                     </Button>
-                )}
-                <Button
-                    size="sm"
-                    className="flex-1 text-xs"
-                    disabled={!canNavigate}
-                    onClick={handleAction}
-                >
-                    {isProcessing ? (
-                        <>
-                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                            Processing...
-                        </>
-                    ) : canNavigate ? (
-                        <>
-                            <Languages className="w-3 h-3 mr-1" />
-                            {file.status === "translated"
-                                ? "Translation"
-                                : "Open Editor"}
-                        </>
-                    ) : (
-                        "Waiting..."
-                    )}
-                </Button>
-            </CardFooter>
-        </Card>
+                </CardFooter>
+            </Card>
+
+            {/* ── Edit dialog ── */}
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Edit File</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-name">Project Title</Label>
+                            <Input
+                                id="edit-name"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                placeholder="File name..."
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-speaker">Speaker</Label>
+                            <Select
+                                value={editSpeakerId}
+                                onValueChange={setEditSpeakerId}
+                            >
+                                <SelectTrigger id="edit-speaker">
+                                    <SelectValue placeholder="Select a speaker..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">
+                                        No speaker
+                                    </SelectItem>
+                                    {speakers.map((s) => (
+                                        <SelectItem key={s.id} value={s.id}>
+                                            {s.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setEditOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => doUpdate()}
+                            disabled={isUpdating || !editName.trim()}
+                        >
+                            {isUpdating && (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            )}
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }
 
 const Dashboard = () => {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     const { data, isLoading, isError } = useQuery({
         queryKey: ["files"],
@@ -226,7 +409,29 @@ const Dashboard = () => {
                 {!isLoading && files.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {files.map((file) => (
-                            <FileCard key={file.id} file={file} />
+                            <FileCard
+                                key={file.id}
+                                file={file}
+                                onDeleted={(id) => {
+                                    queryClient.setQueryData(
+                                        ["files"],
+                                        (old: typeof data) =>
+                                            old
+                                                ? {
+                                                      ...old,
+                                                      data: old.data.filter(
+                                                          (f) => f.id !== id,
+                                                      ),
+                                                  }
+                                                : old,
+                                    );
+                                }}
+                                onUpdated={() =>
+                                    queryClient.invalidateQueries({
+                                        queryKey: ["files"],
+                                    })
+                                }
+                            />
                         ))}
                     </div>
                 )}

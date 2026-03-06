@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -29,6 +30,7 @@ import {
     ArrowRight,
     Download,
     ChevronDown,
+    Copy,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -40,6 +42,7 @@ import {
     exportSubtitlesApi,
     ExportType,
     SubtitleFormat,
+    getFullTextApi,
 } from "@/api/files";
 import { Segment, CorrectionSubmit } from "@/types";
 
@@ -173,6 +176,17 @@ const TranscriptionEditor = () => {
     });
 
     const segments: Segment[] = data?.data?.segments ?? [];
+
+    // Full-text tab state & query 
+    const [activeTab, setActiveTab] = useState("timestamp");
+
+    const { data: fullTextData, isFetching: isFullTextLoading } = useQuery({
+        queryKey: ["fullText", fileId, "transcription"],
+        queryFn: () => getFullTextApi(fileId!, "transcription"),
+        enabled: !!fileId && activeTab === "full-text",
+        staleTime: 1000 * 60 * 5,
+    });
+
     const audioUrl = urlData?.data?.download_url ?? "";
 
     // ── Set audio src imperatively when presigned URL arrives ──
@@ -659,38 +673,62 @@ const TranscriptionEditor = () => {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-1 max-h-[70vh] overflow-y-auto pr-1">
-                                    {segments.map((segment) => (
-                                        <SegmentRow
-                                            key={segment.id}
-                                            segment={segment}
-                                            localText={
-                                                localEdits[segment.id] ??
-                                                segment.transcription_text
-                                            }
-                                            isDirty={
-                                                localEdits[segment.id] !==
-                                                    undefined &&
-                                                localEdits[segment.id] !==
-                                                    segment.transcription_text
-                                            }
-                                            onSeek={seek}
-                                            onChange={handleChange}
-                                            onReset={handleReset}
-                                            nodeRef={(node) => {
-                                                if (node)
-                                                    rowNodesRef.current.set(
-                                                        segment.id,
-                                                        node,
-                                                    );
-                                                else
-                                                    rowNodesRef.current.delete(
-                                                        segment.id,
-                                                    );
-                                            }}
-                                        />
-                                    ))}
-                                </div>
+                                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
+                                    <TabsList className="grid w-full grid-cols-2">
+                                        <TabsTrigger value="timestamp">Timestamp View</TabsTrigger>
+                                        <TabsTrigger value="full-text">Full Text View</TabsTrigger>
+                                    </TabsList>
+
+                                    <TabsContent value="timestamp">
+                                        <div className="space-y-1 max-h-[70vh] overflow-y-auto pr-1">
+                                            {segments.map((segment) => (
+                                                <SegmentRow
+                                                    key={segment.id}
+                                                    segment={segment}
+                                                    localText={localEdits[segment.id] ?? segment.transcription_text}
+                                                    isDirty={
+                                                        localEdits[segment.id] !== undefined &&
+                                                        localEdits[segment.id] !== segment.transcription_text
+                                                    }
+                                                    onSeek={seek}
+                                                    onChange={handleChange}
+                                                    onReset={handleReset}
+                                                    nodeRef={(node) => {
+                                                        if (node) rowNodesRef.current.set(segment.id, node);
+                                                        else rowNodesRef.current.delete(segment.id);
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </TabsContent>
+
+                                    <TabsContent value="full-text">
+                                        {isFullTextLoading ? (
+                                            <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span>Loading full text...</span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="flex justify-end mb-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => navigator.clipboard.writeText(fullTextData?.data?.full_text ?? "")}
+                                                    >
+                                                        <Copy className="w-3.5 h-3.5 mr-2" />
+                                                        Copy
+                                                    </Button>
+                                                </div>
+                                                <div className="min-h-[400px] max-h-[70vh] overflow-y-auto p-4 bg-secondary rounded-lg">
+                                                    <p className="text-base leading-relaxed text-foreground">
+                                                        {fullTextData?.data?.full_text ?? ""}
+                                                    </p>
+                                                </div>
+                                            </>
+                                        )}
+                                    </TabsContent>
+                                </Tabs>
                             </CardContent>
                         </Card>
                     </div>

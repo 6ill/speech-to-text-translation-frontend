@@ -64,6 +64,29 @@ export async function uploadFileApi(
     return res.data;
 }
 
+export async function getFullTextApi(
+    fileId: string,
+    taskType: ExportType
+): Promise<{ data: { file_id: string; task_type: string; full_text: string } }> {
+    const res = await apiClient.get(`/inference/${fileId}/full-text`, {
+        params: { task_type: taskType },
+    });
+    return res.data;
+}
+
+
+/**
+ * PATCH /api/v1/files/{file_id}
+ * Only sends fields that are defined (file_name and/or speaker_id).
+ */
+export async function updateFileApi(
+    fileId: string,
+    data: { file_name?: string; speaker_id?: string | null }
+): Promise<{ data: FileRecord }> {
+    const res = await apiClient.patch(`/files/${fileId}`, data);
+    return res.data;
+}
+
 export async function deleteFileApi(fileId: string): Promise<void> {
     await apiClient.delete(`/files/${fileId}`);
 }

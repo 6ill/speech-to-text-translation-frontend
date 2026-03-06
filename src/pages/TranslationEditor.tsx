@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -27,7 +28,8 @@ import {
     ArrowLeft,
     Mic,
     Download,
-    ChevronDown
+    ChevronDown,
+    Copy,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -37,6 +39,7 @@ import {
     exportSubtitlesApi,
     ExportType,
     SubtitleFormat,
+    getFullTextApi,
 } from "@/api/files";
 import { Segment, CorrectionSubmit } from "@/types";
 
@@ -160,6 +163,22 @@ const TranslationEditor = () => {
     const segments: Segment[] = data?.data?.segments ?? [];
     const audioUrl = urlData?.data?.download_url ?? "";
     const hasTranslation = segments.some((s) => s.translation_text !== null);
+
+    const [activeTab, setActiveTab] = useState("side-by-side");
+
+    const { data: transcriptionFullText, isFetching: isTranscriptionTextLoading } = useQuery({
+        queryKey: ["fullText", fileId, "transcription"],
+        queryFn: () => getFullTextApi(fileId!, "transcription"),
+        enabled: !!fileId && activeTab === "text-only",
+        staleTime: 1000 * 60 * 5,
+    });
+
+    const { data: translationFullText, isFetching: isTranslationTextLoading } = useQuery({
+        queryKey: ["fullText", fileId, "translation"],
+        queryFn: () => getFullTextApi(fileId!, "translation"),
+        enabled: !!fileId && activeTab === "text-only",
+        staleTime: 1000 * 60 * 5,
+    });
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -570,40 +589,98 @@ const TranslationEditor = () => {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
-                                    {segments.map((segment) => (
-                                        <TranslationSegmentRow
-                                            key={segment.id}
-                                            segment={segment}
-                                            localTranslation={
-                                                localEdits[segment.id] ??
-                                                segment.translation_text ??
-                                                ""
-                                            }
-                                            isDirty={
-                                                localEdits[segment.id] !==
-                                                    undefined &&
-                                                localEdits[segment.id] !==
-                                                    (segment.translation_text ??
-                                                        "")
-                                            }
-                                            onSeek={seek}
-                                            onChange={handleChange}
-                                            onReset={handleReset}
-                                            nodeRef={(node) => {
-                                                if (node)
-                                                    rowNodesRef.current.set(
-                                                        segment.id,
-                                                        node,
-                                                    );
-                                                else
-                                                    rowNodesRef.current.delete(
-                                                        segment.id,
-                                                    );
-                                            }}
-                                        />
-                                    ))}
-                                </div>
+                                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+                                    <TabsList className="grid w-full grid-cols-2">
+                                        <TabsTrigger value="side-by-side">Side by Side</TabsTrigger>
+                                        <TabsTrigger value="text-only">Text Only</TabsTrigger>
+                                    </TabsList>
+
+                                    <TabsContent value="side-by-side">
+                                        <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                                            {segments.map((segment) => (
+                                                <TranslationSegmentRow
+                                                    key={segment.id}
+                                                    segment={segment}
+                                                    localTranslation={
+                                                        localEdits[segment.id] ?? segment.translation_text ?? ""
+                                                    }
+                                                    isDirty={
+                                                        localEdits[segment.id] !== undefined &&
+                                                        localEdits[segment.id] !== (segment.translation_text ?? "")
+                                                    }
+                                                    onSeek={seek}
+                                                    onChange={handleChange}
+                                                    onReset={handleReset}
+                                                    nodeRef={(node) => {
+                                                        if (node) rowNodesRef.current.set(segment.id, node);
+                                                        else rowNodesRef.current.delete(segment.id);
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </TabsContent>
+
+                                    <TabsContent value="text-only">
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            <div>
+                                                <h3 className="text-base font-medium text-foreground mb-3 flex items-center gap-2">
+                                                    <span className="w-2.5 h-2.5 bg-blue-500 rounded-full" />
+                                                    Indonesian Transcription
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="ml-auto"
+                                                        onClick={() => navigator.clipboard.writeText(transcriptionFullText?.data?.full_text ?? "")}
+                                                        disabled={isTranscriptionTextLoading}
+                                                    >
+                                                        <Copy className="w-3.5 h-3.5 mr-2" />
+                                                        Copy
+                                                    </Button>
+                                                </h3>
+                                                <div className="min-h-[400px] max-h-[70vh] overflow-y-auto p-4 bg-secondary rounded-lg">
+                                                    {isTranscriptionTextLoading ? (
+                                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                            <span>Loading...</span>
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-base leading-relaxed text-foreground">
+                                                            {transcriptionFullText?.data?.full_text ?? ""}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-base font-medium text-foreground mb-3 flex items-center gap-2">
+                                                    <span className="w-2.5 h-2.5 bg-primary rounded-full" />
+                                                    English Translation
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="ml-auto"
+                                                        onClick={() => navigator.clipboard.writeText(translationFullText?.data?.full_text ?? "")}
+                                                        disabled={isTranslationTextLoading}
+                                                    >
+                                                        <Copy className="w-3.5 h-3.5 mr-2" />
+                                                        Copy
+                                                    </Button>
+                                                </h3>
+                                                <div className="min-h-[400px] max-h-[70vh] overflow-y-auto p-4 bg-secondary rounded-lg">
+                                                    {isTranslationTextLoading ? (
+                                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                            <span>Loading...</span>
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-base leading-relaxed text-foreground">
+                                                            {translationFullText?.data?.full_text ?? ""}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </TabsContent>
+                                </Tabs>
                             </CardContent>
                         </Card>
                     </div>
