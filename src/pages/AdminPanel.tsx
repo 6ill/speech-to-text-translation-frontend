@@ -15,6 +15,7 @@ import {
     Loader2,
     AlertCircle,
     Clock,
+    Users2,
 } from "lucide-react";
 import { getAdminStatsApi } from "@/api/admin";
 import { getFilesApi } from "@/api/files";
@@ -181,6 +182,7 @@ function FileListTabs({ files }: { files: FileRecord[] }) {
 }
 
 const AdminPanel = () => {
+    const navigate = useNavigate();
     const { data: statsData, isLoading: isStatsLoading } = useQuery({
         queryKey: ["adminStats"],
         queryFn: getAdminStatsApi,
@@ -212,9 +214,15 @@ const AdminPanel = () => {
             <Header />
 
             <main className="container mx-auto px-4 py-8">
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-foreground mb-2">Admin Panel</h1>
-                    <p className="text-muted-foreground">Manage user contributions and system quality</p>
+                <div className="mb-8 flex items-start justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground mb-2">Admin Panel</h1>
+                        <p className="text-muted-foreground">Manage user contributions and system quality</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => navigate("/admin/people")}>
+                        <Users2 className="w-4 h-4 mr-2" />
+                        Manage Speakers
+                    </Button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

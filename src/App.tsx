@@ -10,6 +10,7 @@ import Upload from "./pages/Upload";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import AdminPanel from "./pages/AdminPanel";
+import PeopleManagement from "./pages/PeopleManagement";
 import ProjectReview from "./pages/ProjectReview";
 import TranscriptionEditor from "./pages/TranscriptionEditor";
 import TranslationEditor from "./pages/TranslationEditor";
@@ -57,6 +58,7 @@ const App = () => (
                             path="/admin/review/:id"
                             element={<ProjectReview />}
                         />
+                        <Route path="/admin/people" element={<PeopleManagement />} />
                     </Route>
 
                     {/* ── Catch-all ── */}

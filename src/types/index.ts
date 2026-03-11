@@ -55,6 +55,18 @@ export interface CorrectionSubmit {
     segment_id: string;
     corrected_text: string;
 }
+export type CorrectionStatus = "pending" | "approved" | "rejected";
+
+export interface CorrectionRecord {
+    id: string;
+    segment_id: string;
+    original_text: string;
+    corrected_text: string;
+    status: CorrectionStatus;
+    start_timestamp: number;
+    end_timestamp: number;
+    file_id: string;
+}
 
 export interface Person {
     id: string;
