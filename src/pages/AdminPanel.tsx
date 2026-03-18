@@ -16,6 +16,7 @@ import {
     AlertCircle,
     Clock,
     Users2,
+    Cpu,
 } from "lucide-react";
 import { getAdminStatsApi } from "@/api/admin";
 import { getFilesApi } from "@/api/files";
@@ -219,10 +220,16 @@ const AdminPanel = () => {
                         <h1 className="text-3xl font-bold text-foreground mb-2">Admin Panel</h1>
                         <p className="text-muted-foreground">Manage user contributions and system quality</p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => navigate("/admin/people")}>
-                        <Users2 className="w-4 h-4 mr-2" />
-                        Manage Speakers
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => navigate("/admin/pipeline")}>
+                            <Cpu className="w-4 h-4 mr-2" />
+                            Pipeline
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => navigate("/admin/people")}>
+                            <Users2 className="w-4 h-4 mr-2" />
+                            Speakers
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

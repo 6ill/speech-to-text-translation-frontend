@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import AdminPanel from "./pages/AdminPanel";
 import PeopleManagement from "./pages/PeopleManagement";
+import PipelineManagement from "./pages/PipelineManagement";
 import ProjectReview from "./pages/ProjectReview";
 import TranscriptionEditor from "./pages/TranscriptionEditor";
 import TranslationEditor from "./pages/TranslationEditor";
@@ -59,6 +60,7 @@ const App = () => (
                             element={<ProjectReview />}
                         />
                         <Route path="/admin/people" element={<PeopleManagement />} />
+                        <Route path="/admin/pipeline" element={<PipelineManagement />} />
                     </Route>
 
                     {/* ── Catch-all ── */}
