@@ -189,7 +189,6 @@ function ConfigCard({ config, onTriggered, onUpdated }: ConfigCardProps) {
     const { toast } = useToast();
     const [editing, setEditing] = useState(false);
 
-    // Local form state — synced from config on open
     const [form, setForm] = useState<PipelineConfigUpdate>({});
 
     useEffect(() => {
@@ -449,14 +448,12 @@ function ConfigCard({ config, onTriggered, onUpdated }: ConfigCardProps) {
     );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 const PipelineManagement = () => {
     const navigate     = useNavigate();
     const queryClient  = useQueryClient();
     const [taskFilter, setTaskFilter] = useState<PipelineTaskType | undefined>(undefined);
 
-    // ── Configs ──────────────────────────────────────────────────────────────
     const {
         data: configData,
         isLoading: isConfigLoading,
@@ -468,7 +465,6 @@ const PipelineManagement = () => {
 
     const configs: PipelineConfig[] = configData?.data ?? [];
 
-    // ── Run logs ─────────────────────────────────────────────────────────────
     const {
         data: runsData,
         isLoading: isRunsLoading,
@@ -476,7 +472,6 @@ const PipelineManagement = () => {
     } = useQuery({
         queryKey: ["pipelineRuns", taskFilter],
         queryFn: () => getPipelineRunsApi({ task_type: taskFilter, limit: 50 }),
-        // Poll while any run is in "running" state
         refetchInterval: (query) => {
             const runs: PipelineRunLog[] = query.state.data?.data ?? [];
             return runs.some((r) => r.status === "running") ? 4000 : false;
@@ -487,8 +482,8 @@ const PipelineManagement = () => {
     const hasRunning = runs.some((r) => r.status === "running");
 
     const invalidateAll = () => {
-        queryClient.invalidateQueries({ queryKey: ["pipelineRuns"] });
-        queryClient.invalidateQueries({ queryKey: ["pipelineConfigs"] });
+        queryClient.invalidateQueries({ queryKey: ["pipelineRuns"], exact: false });
+        queryClient.invalidateQueries({ queryKey: ["pipelineConfigs"], exact: false });
     };
 
     return (
