@@ -181,11 +181,12 @@ function RunRow({ run }: { run: PipelineRunLog }) {
 
 interface ConfigCardProps {
     config: PipelineConfig;
+    isRunning: boolean;       // true when a run for this task type is active
     onTriggered: () => void;
     onUpdated: () => void;
 }
 
-function ConfigCard({ config, onTriggered, onUpdated }: ConfigCardProps) {
+function ConfigCard({ config, isRunning, onTriggered, onUpdated }: ConfigCardProps) {
     const { toast } = useToast();
     const [editing, setEditing] = useState(false);
 
@@ -275,13 +276,20 @@ function ConfigCard({ config, onTriggered, onUpdated }: ConfigCardProps) {
                         <Button
                             size="sm"
                             className="h-8 text-xs"
-                            disabled={isTriggering || !config.is_active}
+                            disabled={isTriggering || isRunning || !config.is_active}
+                            title={
+                                isRunning
+                                    ? "A run is already in progress"
+                                    : !config.is_active
+                                    ? "Pipeline is disabled"
+                                    : undefined
+                            }
                             onClick={() => doTrigger()}
                         >
-                            {isTriggering
+                            {isTriggering || isRunning
                                 ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                                 : <Play className="w-3.5 h-3.5 mr-1.5" />}
-                            Run Now
+                            {isRunning ? "Running..." : "Run Now"}
                         </Button>
                     </div>
                 </div>
@@ -531,6 +539,9 @@ const PipelineManagement = () => {
                                 <ConfigCard
                                     key={cfg.task_type}
                                     config={cfg}
+                                    isRunning={runs.some(
+                                        (r) => r.task_type === cfg.task_type && r.status === "running"
+                                    )}
                                     onTriggered={invalidateAll}
                                     onUpdated={invalidateAll}
                                 />
