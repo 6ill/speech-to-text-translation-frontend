@@ -1,73 +1,74 @@
-# Welcome to your Lovable project
+# S2TT Crowdsourcing App
 
-## Project info
+A web-based crowdsourcing application frontend for Speech-to-Text (ASR) and Machine Translation (MT). This platform facilitates a Human-in-the-Loop (HITL) workflow to improve machine learning models through manual corrections and Continual Learning (CL).
 
-**URL**: https://lovable.dev/projects/a0e9b312-4276-4654-8646-bc32b9b7af3e
+Backend: [Github Repo](https://github.com/6ill/api-speech-text-translation-crowdsourcing-app)
 
-## How can I edit this code?
+## Background & Overview
 
-There are several ways of editing your application.
+The S2TT (Speech-to-Text-Translation) application allows users to upload audio/video files which are automatically processed using automatic speech recognition model (for transcription) and machine translation model (for translation). 
 
-**Use Lovable**
+The core value of the platform is its **Crowdsourcing & Continual Learning pipeline**:
+1. **Automated Inference:** ML models provide initial transcriptions and translations.
+2. **Human Correction:** Users edit and refine the ML output.
+3. **Admin Review:** Administrators approve or reject these corrections.
+4. **Model Fine-Tuning:** Approved corrections trigger a QLoRA-based fine-tuning pipeline to improve model accuracy (WER/BLEU scores) over time.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/a0e9b312-4276-4654-8646-bc32b9b7af3e) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## Tech Stack
 
-**Use your preferred IDE**
+### Frontend
+- **Framework:** Vite, React, TypeScript
+- **Styling:** Tailwind CSS, shadcn-ui
+- **State Management:** TanStack Query (React Query)
+- **API Client:** Axios (with JWT interceptors)
+- **Routing:** React Router DOM
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## User Roles & Permissions
 
-Follow these steps:
+| Role | Permissions |
+| :--- | :--- |
+| **Standard User** | Upload media, edit own transcriptions/translations, trigger MT tasks. |
+| **Admin** | Access Admin Dashboard, review all files/segments, Approve/Reject corrections, trigger CL pipelines. |
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## Key Workflows
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 1. Media Processing
+- **Upload:** When users upload files, it will trigger an asynchronous ASR task to backend.
+- **Polling:** The frontend implements short-polling to track status changes (`TRANSCRIBING` -> `TRANSCRIBED`).
+- **Translation:** Once transcribed, users can trigger the MT pipeline to generate translations.
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+### 2. Correction & Review
+- **Batch Edits:** Users can edit multiple segments at once. Submitting updates the UI immediately and creates "Pending" tickets in the background.
+- **Audio Sync:** Clicking a segment block in the editor seeks the global player to the specific start timestamp of audio segment.
+- **Review:** Admins use the review interface to approve high-quality data for future model training.
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Setup
 
-**Use GitHub Codespaces**
+### Prerequisites
+- Node.js & npm (Latest LTS recommended)
+- Access to the [S2TT Backend API](https://github.com/6ill/api-speech-text-translation-crowdsourcing-app)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/a0e9b312-4276-4654-8646-bc32b9b7af3e) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Installation
+1. **Clone the repo:**
+   ```bash
+   git clone https://github.com/6ill/speech-to-text-translation-frontend.git
+   cd speech-to-text-translation-frontend
+   ```
+2. Install dependencies:
+    ```bash
+    npm install
+    Configure Environment:
+    Create a .env file based on .env.example and add your VITE_API_URL.
+    ```
+3. Run Development Server:
+    ```bash
+    npm run dev
+    ```
