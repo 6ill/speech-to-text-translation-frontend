@@ -34,8 +34,11 @@ const ACCEPTED_TYPES = [
     "video/mp4", // .mp4
     "video/webm",
 ];
-const ACCEPTED_EXTENSIONS = ".mp3,.wav,.m4a,.ogg,.mp4,.webm";
-const MAX_SIZE_MB = 500;
+const ACCEPTED_AUDIO_EXTS = [".mp3", ".wav", ".m4a", ".ogg"];
+const ACCEPTED_VIDEO_EXTS = [".mp4", ".mov", ".avi", ".mkv"];
+const ACCEPTED_EXTENSIONS = [...ACCEPTED_AUDIO_EXTS, ...ACCEPTED_VIDEO_EXTS].join(",");
+const MAX_AUDIO_SIZE_MB = 500;
+const MAX_VIDEO_SIZE_MB = 2000;
 
 function formatBytes(bytes: number) {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -71,12 +74,22 @@ const UploadPage = () => {
     const speakers = peopleData?.data ?? [];
 
     const validateFile = (file: File): string | null => {
-        if (!ACCEPTED_TYPES.includes(file.type) && file.type !== "") {
-            return "Unsupported file format. Please use MP3, WAV, M4A, OGG, or MP4.";
+        const fileName = file.name.toLowerCase();
+        const isAudio = ACCEPTED_AUDIO_EXTS.some(ext => fileName.endsWith(ext));
+        const isVideo = ACCEPTED_VIDEO_EXTS.some(ext => fileName.endsWith(ext));
+
+        if (!isAudio && !isVideo) {
+            return "Unsupported file format. Please use MP3, WAV, M4A, OGG for audio, or MP4, MOV, AVI, MKV for video.";
         }
-        if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-            return `File size too large. Maximum ${MAX_SIZE_MB} MB.`;
+
+        if (isAudio && file.size > MAX_AUDIO_SIZE_MB * 1024 * 1024) {
+            return `Audio file size too large. Maximum ${MAX_AUDIO_SIZE_MB} MB.`;
         }
+
+        if (isVideo && file.size > MAX_VIDEO_SIZE_MB * 1024 * 1024) {
+            return `Video file size too large. Maximum 2 GB.`;
+        }
+
         return null;
     };
 
@@ -269,8 +282,8 @@ const UploadPage = () => {
                                                 or click to browse
                                             </p>
                                             <p className="text-xs text-muted-foreground">
-                                                MP3, WAV, M4A, OGG, MP4 — max{" "}
-                                                {MAX_SIZE_MB} MB
+                                                Audio (MP3, WAV, M4A, OGG) max {MAX_AUDIO_SIZE_MB}MB <br />
+                                                Video (MP4, MOV, AVI, MKV) max 2GB
                                             </p>
                                         </div>
                                     )}
