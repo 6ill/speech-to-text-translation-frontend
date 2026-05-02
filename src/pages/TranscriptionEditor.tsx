@@ -442,12 +442,18 @@ const TranscriptionEditor = () => {
                             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
                         </Button>
                         <div>
-                            <h1 className="text-2xl font-bold text-foreground">
-                                Transcription Editor
+                            <h1 className="text-2xl font-bold text-foreground truncate max-w-2xl" title={fileData?.data?.file_name}>
+                                {fileData?.data?.file_name || "Transcription Editor"}
                             </h1>
-                            <p className="text-sm text-muted-foreground">
-                                {segments.length} segments
-                            </p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>{segments.length} segments</span>
+                                {fileData?.data?.speaker && (
+                                    <>
+                                        <span>·</span>
+                                        <span>Speaker: {fileData.data.speaker.name}</span>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">

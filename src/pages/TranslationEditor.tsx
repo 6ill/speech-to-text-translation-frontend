@@ -35,6 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
     getSegmentsApi,
     getFileUrlApi,
+    getFileByIdApi,
     submitTranslationCorrectionsApi,
     exportSubtitlesApi,
     ExportType,
@@ -146,6 +147,12 @@ const TranslationEditor = () => {
     const [playbackRate, setPlaybackRate] = useState(1);
     const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
     const [isExporting, setIsExporting] = useState(false);
+
+    const { data: fileData } = useQuery({
+        queryKey: ["file", fileId],
+        queryFn: () => getFileByIdApi(fileId!),
+        enabled: !!fileId,
+    });
 
     const { data, isLoading, isError } = useQuery({
         queryKey: ["segments", fileId],
@@ -402,13 +409,18 @@ const TranslationEditor = () => {
                             <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
                         </Button>
                         <div>
-                            <h1 className="text-2xl font-bold text-foreground">
-                                Translation Editor
+                            <h1 className="text-2xl font-bold text-foreground truncate max-w-2xl" title={fileData?.data?.file_name}>
+                                {fileData?.data?.file_name || "Translation Editor"}
                             </h1>
-                            <p className="text-sm text-muted-foreground">
-                                {segments.length} segments · Indonesian →
-                                English
-                            </p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>{segments.length} segments · ID → EN</span>
+                                {fileData?.data?.speaker && (
+                                    <>
+                                        <span>·</span>
+                                        <span>Speaker: {fileData.data.speaker.name}</span>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
