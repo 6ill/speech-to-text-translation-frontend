@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import {
     Select,
@@ -65,6 +66,8 @@ const UploadPage = () => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadDone, setUploadDone] = useState(false);
+    
+    const [autoTranslate, setAutoTranslate] = useState(false);
 
     // Fetch speaker list for dropdown
     const { data: peopleData } = useQuery({
@@ -136,14 +139,16 @@ const UploadPage = () => {
             await uploadFileApi(
                 fileToUpload,
                 speakerId && speakerId !== "none" ? speakerId : null,
+                autoTranslate,
                 setUploadProgress,
             );
 
             setUploadDone(true);
             toast({
                 title: "Upload successful!",
-                description:
-                    "Transcription is being processed. You will be redirected to the dashboard.",
+                description: autoTranslate
+                    ? "File uploaded. Transcription and translation are starting."
+                    : "Transcription is being processed. You will be redirected.",
             });
 
             // Navigate to dashboard after short delay so user sees success state
@@ -314,6 +319,21 @@ const UploadPage = () => {
                                     </SelectContent>
                                 </Select>
                             </div>
+                            
+                            {/* Auto translate toggle */}
+                            <div className="flex flex-row items-center justify-between rounded-lg border border-border p-4">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base font-medium">Auto-Translate</Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Automatically queue English translation after transcription completes.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={autoTranslate}
+                                    onCheckedChange={setAutoTranslate}
+                                    disabled={isUploading}
+                                />
+                            </div>
 
                             {/* ── Upload Progress ── */}
                             {isUploading && (
@@ -345,9 +365,8 @@ const UploadPage = () => {
                                 <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg p-3">
                                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                                     <span>
-                                        After upload, automatic transcription
-                                        will start. This may take a few minutes
-                                        depending on the length of the audio.
+                                        After upload, automatic transcription {autoTranslate && "and translation "} 
+                                        will start. This may take a few minutes depending on the length of the media.
                                     </span>
                                 </div>
                             )}

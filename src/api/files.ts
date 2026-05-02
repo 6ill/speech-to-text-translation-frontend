@@ -42,6 +42,7 @@ export async function getFileUrlApi(
 export async function uploadFileApi(
     file: File,
     speakerId: string | null,
+    autoTranslate: boolean,
     onUploadProgress?: (percent: number) => void,
 ): Promise<{ data: FileRecord }> {
     const formData = new FormData();
@@ -49,6 +50,8 @@ export async function uploadFileApi(
     if (speakerId) {
         formData.append("speaker_id", speakerId);
     }
+
+    formData.append("auto_translate", String(autoTranslate));
 
     const res = await apiClient.post("/files/", formData, {
         headers: { "Content-Type": "multipart/form-data" },
