@@ -104,12 +104,14 @@ function RunRow({ run }: { run: PipelineRunLog }) {
     const config = RUN_STATUS_CONFIG[run.status] ?? RUN_STATUS_CONFIG.failed;
     const StatusIcon = config.icon;
     const hasMetrics = run.metrics_baseline || run.metrics_new_model;
+    
+    const canExpand = hasMetrics || !!run.message;
 
     return (
         <div className="rounded-lg border border-border bg-card">
             <div
-                className="flex items-center justify-between p-3 gap-4 cursor-pointer hover:bg-muted/30 transition-colors"
-                onClick={() => hasMetrics && setExpanded((v) => !v)}
+                className={`flex items-center justify-between p-3 gap-4 transition-colors ${canExpand ? "cursor-pointer hover:bg-muted/30" : ""}`}
+                onClick={() => canExpand && setExpanded((v) => !v)}
             >
                 <div className="flex items-center gap-3 min-w-0">
                     <Badge
@@ -132,7 +134,7 @@ function RunRow({ run }: { run: PipelineRunLog }) {
                 <div className="flex items-center gap-4 shrink-0 text-xs text-muted-foreground">
                     <span>{run.data_samples_used} samples</span>
                     <span>{formatDuration(run.start_time, run.end_time)}</span>
-                    {hasMetrics && (
+                    {canExpand && (
                         expanded
                             ? <ChevronUp className="w-3.5 h-3.5" />
                             : <ChevronDown className="w-3.5 h-3.5" />
@@ -141,9 +143,13 @@ function RunRow({ run }: { run: PipelineRunLog }) {
             </div>
 
             {expanded && (
-                <div className="border-t border-border px-4 py-3 space-y-2">
+                <div className="border-t border-border px-4 py-3 space-y-3">
                     {run.message && (
-                        <p className="text-xs text-muted-foreground">{run.message}</p>
+                        <div className={`p-3 rounded-md border ${run.status === 'failed' ? 'bg-destructive/10 border-destructive/20 text-destructive' : 'bg-muted/40 border-border text-muted-foreground'}`}>
+                            <p className="text-xs font-mono whitespace-pre-wrap break-words">
+                                {run.message}
+                            </p>
+                        </div>
                     )}
                     {run.mlflow_run_id && (
                         <p className="text-xs text-muted-foreground font-mono">
