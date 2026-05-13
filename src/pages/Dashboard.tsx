@@ -60,9 +60,10 @@ const STATUS_CONFIG: Record<FileStatus, { label: string; className: string }> =
     {
         uploading: { label: "Uploading", className: "bg-gray-500 text-white" },
         uploaded: { label: "Uploaded", className: "bg-blue-400 text-white" },
-        transcribing: { label: "Transcribing", className: "bg-blue-600 text-white" },
+    transcribing: { label: "Transcribing", className: "bg-blue-600 text-white" },
         transcribed: { label: "Transcribed", className: "bg-green-600 text-white" },
         translating: { label: "Translating", className: "bg-amber-500 text-white" },
+        failed: { label: "Failed", className: "bg-red-600 text-white" },
         translated: { label: "Translated", className: "bg-emerald-600 text-white" }
     };
 
@@ -243,11 +244,17 @@ function FileCard({
                         className="flex-1 text-xs"
                         disabled={!canNavigate}
                         onClick={handleAction}
+                        variant={file.status === "failed" ? "destructive" : "default"}
                     >
                         {isProcessing ? (
                             <>
                                 <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                                 Processing...
+                            </>
+                        ) : file.status === "failed" ? (
+                            <>
+                                <AlertCircle className="w-3 h-3 mr-1" />
+                                Processing Failed
                             </>
                         ) : canNavigate ? (
                             <>

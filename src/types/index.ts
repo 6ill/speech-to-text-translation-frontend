@@ -4,6 +4,7 @@ export type FileStatus =
     | "transcribing"
     | "transcribed"
     | "translating"
+    | "failed"
     | "translated";
 
 export const POLLING_STATUSES: FileStatus[] = [

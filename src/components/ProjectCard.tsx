@@ -6,7 +6,7 @@ import { Clock, Play } from "lucide-react";
 interface ProjectCardProps {
   title: string;
   duration: string;
-  status: "transcribing" | "transcribed" | "translating" | "translated";
+  status: "transcribing" | "transcribed" | "translating" | "translated" | "failed";
   uploadedDate: string;
 }
 
@@ -22,6 +22,7 @@ const ProjectCard = ({
       case "transcribed": return "bg-green-500";
       case "translating": return "bg-accent";
       case "translated": return "bg-green-500";
+      case "failed": return "bg-red-500";
       default: return "bg-gray-500";
     }
   };
@@ -32,6 +33,7 @@ const ProjectCard = ({
       case "transcribed": return "Transcribed";
       case "translating": return "Translating";
       case "translated": return "Translated";
+      case "failed": return "Failed";
       default: return "Unknown";
     }
   };
