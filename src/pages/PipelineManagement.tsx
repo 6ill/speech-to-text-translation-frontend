@@ -11,6 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     ArrowLeft, Play, Loader2, AlertCircle, CheckCircle2,
     XCircle, Clock, SkipForward, Settings, History,
     ChevronDown, ChevronUp, RefreshCw,
@@ -185,6 +192,166 @@ function RunRow({ run }: { run: PipelineRunLog }) {
     );
 }
 
+
+const DAYS_OF_WEEK = [
+    { value: "0", label: "Sunday" },
+    { value: "1", label: "Monday" },
+    { value: "2", label: "Tuesday" },
+    { value: "3", label: "Wednesday" },
+    { value: "4", label: "Thursday" },
+    { value: "5", label: "Friday" },
+    { value: "6", label: "Saturday" },
+];
+
+function parseCron(cron: string) {
+    if (!cron) return { type: "weekly", time: "03:00", dayOfWeek: "0", dayOfMonth: "1", customStr: "0 3 * * 0" };
+    const parts = cron.trim().split(/\s+/);
+    if (parts.length !== 5) return { type: "custom", time: "00:00", dayOfWeek: "0", dayOfMonth: "1", customStr: cron };
+
+    const [min, hour, dom, mon, dow] = parts;
+    const pad = (n: string) => (n.length === 1 ? `0${n}` : n);
+    const isNum = (s: string) => !isNaN(Number(s));
+
+    if (isNum(min) && isNum(hour)) {
+        const time = `${pad(hour)}:${pad(min)}`;
+        if (dom === "*" && mon === "*" && dow === "*") {
+            return { type: "daily", time, dayOfWeek: "0", dayOfMonth: "1", customStr: cron };
+        }
+        if (dom === "*" && mon === "*" && isNum(dow)) {
+            return { type: "weekly", time, dayOfWeek: dow, dayOfMonth: "1", customStr: cron };
+        }
+        if (isNum(dom) && mon === "*" && dow === "*") {
+            return { type: "monthly", time, dayOfWeek: "0", dayOfMonth: dom, customStr: cron };
+        }
+    }
+    return { type: "custom", time: "00:00", dayOfWeek: "0", dayOfMonth: "1", customStr: cron };
+}
+
+function buildCron(state: ReturnType<typeof parseCron>) {
+    if (state.type === "custom") return state.customStr;
+    
+    const [hStr, mStr] = (state.time || "00:00").split(":");
+    const hNum = parseInt(hStr, 10);
+    const mNum = parseInt(mStr, 10);
+    const h = isNaN(hNum) ? "0" : hNum.toString();
+    const m = isNaN(mNum) ? "0" : mNum.toString();
+
+    if (state.type === "daily") return `${m} ${h} * * *`;
+    if (state.type === "weekly") return `${m} ${h} * * ${state.dayOfWeek}`;
+    if (state.type === "monthly") return `${m} ${h} ${state.dayOfMonth || "1"} * *`;
+    return `${m} ${h} * * *`;
+}
+
+function CronScheduleInput({ value, onChange }: { value?: string; onChange: (v: string) => void }) {
+    const [state, setState] = useState(() => parseCron(value || "0 3 * * 0"));
+
+    const update = (updates: Partial<typeof state>) => {
+        const next = { ...state, ...updates };
+        setState(next);
+        onChange(buildCron(next));
+    };
+
+    return (
+        <div className="space-y-3 p-3 rounded-md border border-border bg-muted/20">
+            <div className="flex items-center gap-2">
+                <Select value={state.type} onValueChange={(v) => update({ type: v as any })}>
+                    <SelectTrigger className="w-[140px] h-8 text-xs bg-background">
+                        <SelectValue placeholder="Frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="custom">Advanced (Cron)</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                {state.type !== "custom" && (
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">at</span>
+                        <Input
+                            type="time"
+                            value={state.time}
+                            onChange={(e) => update({ time: e.target.value })}
+                            className="w-[110px] h-8 text-xs bg-background"
+                        />
+                        <span className="text-xs text-muted-foreground">UTC</span>
+                    </div>
+                )}
+            </div>
+
+            {state.type === "weekly" && (
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-16">On day:</span>
+                    <Select value={state.dayOfWeek} onValueChange={(v) => update({ dayOfWeek: v })}>
+                        <SelectTrigger className="w-[140px] h-8 text-xs bg-background">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {DAYS_OF_WEEK.map(d => (
+                                <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+
+            {state.type === "monthly" && (
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-16">On date:</span>
+                    <Input
+                        type="number"
+                        min={1}
+                        max={31}
+                        value={state.dayOfMonth}
+                        onChange={(e) => update({ dayOfMonth: e.target.value })}
+                        className="w-[80px] h-8 text-xs bg-background"
+                    />
+                </div>
+            )}
+
+            {state.type === "custom" && (
+               <div className="space-y-2">
+                    <Input
+                        value={state.customStr}
+                        onChange={(e) => update({ customStr: e.target.value })}
+                        placeholder="0 3 * * 0"
+                        className="font-mono text-sm h-8 bg-background"
+                    />
+                    <div className="text-[11px] text-muted-foreground bg-background p-2 rounded-md border border-border/50">
+                        <p className="font-medium mb-1">Format: <span className="font-mono text-[10px]">minute hour day(month) month day(week)</span></p>
+                        <p className="mb-1">Click an example to use it:</p>
+                        <ul className="space-y-1">
+                            <li className="flex items-center gap-2">
+                                <button 
+                                    onClick={() => update({ customStr: "0 * * * *" })}
+                                    className="font-mono text-[10px] bg-muted/50 hover:bg-muted text-foreground px-1.5 py-0.5 rounded transition-colors"
+                                >
+                                    0 * * * *
+                                </button>
+                                <span>Every hour</span>
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <button 
+                                    onClick={() => update({ customStr: "0 12 * * 1-5" })}
+                                    className="font-mono text-[10px] bg-muted/50 hover:bg-muted text-foreground px-1.5 py-0.5 rounded transition-colors"
+                                >
+                                    0 12 * * 1-5
+                                </button>
+                                <span>Monday to Friday at 12:00 PM UTC</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            )}
+
+            <div className="text-[10px] font-mono text-muted-foreground bg-background px-2 py-1 rounded border border-border inline-block">
+                Raw output: <span className="text-foreground font-semibold">{buildCron(state)}</span>
+            </div>
+        </div>
+    );
+}
+
 interface ConfigCardProps {
     config: PipelineConfig;
     isRunning: boolean;       // true when a run for this task type is active
@@ -342,19 +509,15 @@ function ConfigCard({ config, isRunning, onTriggered, onUpdated }: ConfigCardPro
                         <Separator />
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="sm:col-span-2 space-y-1.5">
-                                <Label htmlFor={`cron-${config.task_type}`}>
-                                    Cron Schedule
-                                </Label>
-                                <Input
-                                    id={`cron-${config.task_type}`}
-                                    value={form.cron_schedule ?? ""}
-                                    onChange={(e) => set("cron_schedule", e.target.value)}
-                                    placeholder="0 3 * * 0"
-                                    className="font-mono text-sm"
+                            <div className="sm:col-span-2 space-y-2">
+                                <Label>Schedule</Label>
+                                <CronScheduleInput 
+                                    value={form.cron_schedule ?? config.cron_schedule}
+                                    onChange={(v) => set("cron_schedule", v)}
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Standard cron syntax (UTC). e.g. <span className="font-mono">0 3 * * 0</span> = every Sunday at 3 AM.
+                                <p className="text-[10px] text-muted-foreground mt-1">
+                                    Determines how often the continual learning pipeline automatically triggers.
+                                    <strong className="font-semibold text-foreground"> Note: All times are evaluated in UTC</strong>, not your local timezone.
                                 </p>
                             </div>
 
