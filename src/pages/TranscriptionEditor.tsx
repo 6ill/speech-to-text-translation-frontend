@@ -43,6 +43,7 @@ import {
     ExportType,
     SubtitleFormat,
     getFullTextApi,
+    exportDocxApi,
 } from "@/api/files";
 import { Segment, CorrectionSubmit } from "@/types";
 
@@ -351,6 +352,22 @@ const TranscriptionEditor = () => {
         }
     };
 
+    const handleExportDocx = async (exportType: ExportType) => {
+        setIsExporting(true);
+        try {
+            await exportDocxApi(fileId!, exportType);
+        } catch {
+            toast({
+                title: "Export failed",
+                description:
+                    "Could not download subtitle file. Please try again.",
+                variant: "destructive",
+            })
+        } finally {
+            setIsExporting(false);
+        }
+    }
+
     const { mutate: submitCorrections, isPending: isSaving } = useMutation({
         mutationFn: (c: CorrectionSubmit[]) =>
             submitTranscriptionCorrectionsApi(c),
@@ -499,6 +516,13 @@ const TranscriptionEditor = () => {
                                     }
                                 >
                                     Download as .vtt
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() =>
+                                        handleExportDocx("transcription")
+                                    }
+                                >
+                                    Download as .docx
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>

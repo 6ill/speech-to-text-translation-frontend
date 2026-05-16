@@ -157,3 +157,33 @@ export async function exportSubtitlesApi(
     anchor.remove();
     URL.revokeObjectURL(objectUrl);
 }
+
+export async function exportDocxApi(
+    fileId: string,
+    exportType: ExportType
+): Promise<void> {
+    const res = await apiClient.get(`/inference/${fileId}/export-docx`, {
+        params: { export_type: exportType },
+        responseType: "blob",
+    });
+
+    const disposition: string = res.headers["content-disposition"] ?? "";
+    const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;\n\r]+)/i);
+    const filename = match
+        ? decodeURIComponent(match[1].replace(/["']/g, "").trim())
+        : `full_text_${exportType}.docx`;
+
+    const objectUrl = URL.createObjectURL(
+        new Blob([res.data], { 
+            type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+        })
+    );
+
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(objectUrl);
+}
